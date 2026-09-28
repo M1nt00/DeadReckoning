@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>DEAD RECKONING — 100m의 심리전</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 창 전체 = 우주 (카메라 · 레터박스 · 필름 입자까지 여기서 그림) -->
+  <canvas id="space"></canvas>
+
+  <div id="app">
+    <header id="top">
+      <div class="logo">DEAD RECKONING <span>100m의 심리전</span></div>
+      <div id="turnInfo"></div>
+      <button id="menuBtn" class="topBtn">메인 화면</button>
+      <button id="logBtn" class="topBtn">기록 (L)</button>
+      <button id="helpBtn" class="topBtn">규칙 (H)</button>
+    </header>
+
+    <!-- 전장: 함선이 떠 있는 자리 -->
+    <section id="field">
+      <div id="hudPlayer" class="hud left"></div>
+      <div id="hudEnemy" class="hud right"></div>
+      <div id="hudCenter">
+        <div id="steps" class="phaseSteps"></div>
+        <div id="distLbl"></div>
+        <div id="torps"></div>
+      </div>
+      <div id="banner" class="hidden"></div>
+      <div id="hint"></div>
+      <div id="radio"></div>
+      <div id="turnSum" class="hidden"></div>
+      <div id="reveal" class="hidden">
+        <div class="revealSide me"></div>
+        <div class="revealMid">동시 공개</div>
+        <div class="revealSide foe"></div>
+      </div>
+    </section>
+
+    <!-- 아래 트레이: 계획 + 손패 -->
+    <section id="tray">
+      <section id="planBar"></section>
+      <section id="hand"></section>
+    </section>
+
+    <!-- 메인 화면 -->
+    <section id="title" class="hidden">
+      <div class="tWrap">
+        <div class="tKicker">추측항법 — 보이지 않는 것을 계산으로 찾는 항해술</div>
+        <h1 class="tLogo"><span>DEAD</span><span>RECKONING</span></h1>
+        <div class="tSub">100m의 심리전</div>
+        <div class="tTag">적의 다음 수를, 거리로 읽어라.</div>
+        <nav class="tMenu">
+          <button data-m="endless"><i>01</i>끝없는 항해<small id="bestDepth">로그라이트</small></button>
+          <button data-m="practice"><i>02</i>연습 전투<small>순찰 구축함 VEX-7과 1:1</small></button>
+          <button data-m="rules"><i>03</i>규칙</button>
+          <button data-m="voyage" disabled><i>04</i>스토리 항해<small>준비 중</small></button>
+          <button data-m="depth10" class="dev"><i>T</i>깊이 10부터<small>테스트 · 앞 구역을 깬 상태로</small></button>
+        </nav>
+      </div>
+      <div class="tFoot">v0.4 · 마우스 또는 ↑ ↓ · Enter</div>
+    </section>
+
+    <!-- 항해 화면 (이야기 · 항로 · 보상 · 사건) -->
+    <section id="voyage" class="hidden"></section>
+
+    <!-- 전투 기록 (서랍) -->
+    <aside id="log"></aside>
+    <div id="overlay" class="hidden"></div>
+  </div>
+
+  <!-- 수치 (숫자만 바꾸고 새로고침) -->
+  <script src="data/cards.js"></script>
+  <script src="data/rules.js"></script>
+  <script src="data/voyage.js"></script>
+  <!-- 게임 코드 -->
+  <script src="src/battle.js"></script>
+  <script src="src/ai.js"></script>
+  <script src="src/art.js"></script>
+  <script src="src/icons.js"></script>
+  <script src="src/scene.js"></script>
+  <script src="src/voyage.js"></script>
+  <script src="src/ui.js"></script>
+</body>
+</html>
