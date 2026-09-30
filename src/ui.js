@@ -192,6 +192,22 @@ function renderRange() {
 }
 
 // 놓은 카드가 계획 줄로 날아 들어감
+// 카드 복제본을 target 요소 쪽으로 날려 보냄 (지원 카드 → 버린 더미)
+function flyTo(srcEl, target) {
+  const r0 = srcEl.getBoundingClientRect(), r1 = target.getBoundingClientRect();
+  const fly = srcEl.cloneNode(true);
+  fly.classList.remove('lifted', 'planned', 'dealt');
+  fly.classList.add('flyCard', 'toPile');
+  fly.style.left = r0.left + r0.width / 2 + 'px'; fly.style.top = r0.top + r0.height / 2 + 'px';
+  document.body.appendChild(fly);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    fly.style.left = r1.left + r1.width / 2 + 'px'; fly.style.top = r1.top + r1.height / 2 + 'px';
+    fly.classList.add('go');
+  }));
+  setTimeout(() => fly.remove(), 500);
+}
+let drawnIdx = null;   // 방금 드로우로 뽑은 손패 번호들 → 뽑을 더미에서 날아오는 연출
+
 function flyCard(srcEl, x, y, hand) {
   const fly = srcEl.cloneNode(true);
   fly.classList.remove('lifted', 'planned');
@@ -313,6 +329,19 @@ function renderHand() {
     </div>`;
   }).join('');
   skipDeal = false;
+  if (drawnIdx) {
+    const pr = $('drawPile').getBoundingClientRect();
+    for (const i of drawnIdx) {
+      const el = $('hand').querySelector(`.card[data-hand="${i}"]`);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--fx', pr.left + pr.width / 2 - (r.left + r.width / 2) + 'px');
+      el.style.setProperty('--fy', pr.top + pr.height / 2 - (r.top + r.height / 2) + 'px');
+      el.classList.add('drawIn');
+      el.addEventListener('animationend', () => el.classList.remove('drawIn'), { once: true });
+    }
+    drawnIdx = null;
+  }
 }
 
 // ── [자세히]: 카드의 실제 효과 (거리별 피해 등) ──
@@ -619,10 +648,15 @@ function endAim(d, x, y) {
     const c = DATA.cards[d.id];
     if (c.maxRange !== undefined && B.distance > c.maxRange) { hint(`${c.name}는 ${c.maxRange}km 이내에서만 쓸 수 있어요`); renderRange(); return; }
     if (c.type === 'support') {                       // 지원: 계획에 넣지 않고 바로 사용
+      const before = B.player.hand.length;
       if (!useSupport(B, B.player, d.hand)) { hint(`연료가 모자라요 (${c.name}: 연료 ${c.cost})`); renderRange(); return; }
       Scene.lockOn('player', `${c.name} 사용`, '#FFD166');
+      flyTo(d.src, $('discardPile'));
       const P = B.player;
       P.plan.cool = Math.min(P.plan.cool, planSummary(P, Object.assign({}, P.plan, { cool: 0 })).left);
+      drawnIdx = [];
+      for (let i = before - 1; i < P.hand.length; i++) drawnIdx.push(i);   // 새로 뽑은 카드 = 손패 끝
+      skipDeal = true;                                                       // 나머지 손패는 그대로 (다시 올라오지 않게)
       render();
       return;
     }

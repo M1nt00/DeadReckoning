@@ -652,3 +652,12 @@ body.resolving #skipHint { opacity: 1; }
 #codex .cxDetail .dhead .cheat { font-family: var(--mono); color: var(--heat); font-weight: 900; }
 #codex .cxDetail ul { margin: 8px 0 0; padding-left: 18px; color: #C9D3E4; line-height: 1.6; }
 #codex .cxDetail .mini { margin-top: 8px; }
+
+/* 드로우: 뽑을 더미에서 손패로 날아옴 · 쓴 지원 카드는 버린 더미로 */
+.card.drawIn { animation: drawIn 0.55s cubic-bezier(.2,.9,.3,1) both; z-index: 5; }
+@keyframes drawIn {
+  0% { transform: translate(var(--fx), var(--fy)) scale(0.45) rotate(-12deg); opacity: 0.2; }
+  60% { opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+.flyCard.toPile.go { transform: translate(-50%, -50%) scale(0.3) rotate(10deg); opacity: 0.3; }
