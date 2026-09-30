@@ -457,7 +457,7 @@ async function revealPhase(step, mine, theirs) {
   await sleep(380);
   me.innerHTML = html(mine, true);
   foe.innerHTML = html(theirs, true);
-  await sleep(big ? 1200 : 850);
+  await sleep(!mine.length && !theirs.length ? 500 : big ? 1200 : 850);   // 둘 다 '없음'이면 짧게
   el.classList.add('docked');
   await sleep(260);
 }
@@ -659,7 +659,7 @@ async function decide() {
     const mine = phaseItems(step, B.player), theirs = phaseItems(step, B.enemy);
     stepName = step.name;
     renderHud();
-    if (mine.length || theirs.length) await revealPhase(step, mine, theirs);
+    if (step.reveal) await revealPhase(step, mine, theirs);   // 공개 단계는 늘 보여줌 (둘 다 안 냈으면 '없음')
     B.events = [];
     step.run();
     renderHud();
