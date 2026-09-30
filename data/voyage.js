@@ -57,7 +57,7 @@ DATA.voyage = {
       events: ['distress', 'buoy', 'cargo'],
       flagRadio: [
         ['고철왕', '여어, 연합 깡통. 신호도 없이 헤매는 꼴이 딱 우리 먹잇감이군.'],
-        ['고철왕', '거리 재느라 바쁘지? 걱정 마. 금방 0m로 만들어 줄 테니.'],
+        ['고철왕', '거리 재느라 바쁘지? 걱정 마. 금방 0km로 만들어 줄 테니.'],
         ['세라', '붙어 오려는 배입니다. 붙기 직전을 노리세요.'],
       ],
       outro: [
@@ -165,18 +165,18 @@ DATA.voyage = {
 // ── 1장 적 함선 ──  (교리 · 선호 거리는 화면에 공개 → 읽을 단서)
 Object.assign(DATA.ships, {
   scav: {
-    name: '고철단 초계정', hull: 68, reactor: 4, cooling: 12, prefer: 300,
-    doctrine: '돌격', doctrineDesc: '산탄 거리(300m 이내)로 파고든다',
+    name: '고철단 초계정', hull: 68, reactor: 4, cooling: 10, prefer: 300,
+    doctrine: '돌격', doctrineDesc: '산탄 거리(300km 이내)로 파고든다',
     deck: ['scatter', 'scatter', 'laser', 'boarding', 'burn', 'burn', 'shield', 'shield', 'torpedo', 'pointDefense', 'retro'],
   },
   raider: {
-    name: '고철단 약탈선', hull: 96, reactor: 5, cooling: 12, prefer: 450, elite: true,
+    name: '고철단 약탈선', hull: 96, reactor: 5, cooling: 10, prefer: 450, elite: true,
     doctrine: '강습', doctrineDesc: '어뢰로 몰아넣고 산탄으로 끝낸다',
     deck: ['scatter', 'scatter', 'laser', 'laser', 'torpedo', 'torpedo', 'railgun', 'heavyShield', 'shield', 'burn', 'retro', 'pointDefense'],
   },
   junkKing: {
-    name: '「고철왕」 누더기 중구축함', hull: 84, reactor: 5, cooling: 14, prefer: 200, flagship: true,
-    doctrine: '돌격', doctrineDesc: '무조건 붙는다. 0m에서 군대를 보내 올라탄다 (보호막 무시)',
+    name: '「고철왕」 누더기 중구축함', hull: 84, reactor: 5, cooling: 10, prefer: 200, flagship: true,
+    doctrine: '돌격', doctrineDesc: '무조건 붙는다. 0km에서 군대를 보내 올라탄다 (보호막 무시)',
     deck: ['scatter', 'scatter', 'laser', 'boarding', 'burn', 'burn', 'heavyShield', 'shield', 'laser', 'laser', 'torpedo', 'pointDefense', 'retro'],
   },
 });
@@ -184,22 +184,22 @@ Object.assign(DATA.ships, {
 // ── 2장 적 함선 ──  연합 함대 잔존함 (나침반을 반역자로 의심)
 Object.assign(DATA.ships, {
   allyPatrol: {
-    name: '연합 초계함', hull: 100, reactor: 5, cooling: 12, prefer: 1000,
-    doctrine: '균형', doctrineDesc: '레이저와 레일건을 고루 쓴다. 1,000m 안팎을 지킨다',
+    name: '연합 초계함', hull: 100, reactor: 5, cooling: 10, prefer: 1000,
+    doctrine: '균형', doctrineDesc: '레이저와 레일건을 고루 쓴다. 1,000km 안팎을 지킨다',
     deck: ['laser', 'laser', 'laser', 'railgun', 'railgun', 'shield', 'regenShield', 'heavyShield', 'torpedo', 'pointDefense', 'retro', 'coolCatalyst'],
   },
   torpBoat: {
-    name: '연합 어뢰정', hull: 76, reactor: 5, cooling: 12, prefer: 800, preferJitter: 400,
+    name: '연합 어뢰정', hull: 76, reactor: 5, cooling: 10, prefer: 800, preferJitter: 400,
     doctrine: '기동', doctrineDesc: '어뢰를 쏘고 거리를 계속 바꾼다. 선호 거리가 매 턴 흔들린다',
     deck: ['torpedo', 'torpedo', 'torpedo', 'torpedo', 'laser', 'laser', 'pointDefense', 'shield', 'shield', 'burn', 'retro'],
   },
   allyAssault: {
-    name: '연합 강습함 「방패」', hull: 96, reactor: 5, cooling: 12, prefer: 900, elite: true,
+    name: '연합 강습함 「방패」', hull: 96, reactor: 5, cooling: 10, prefer: 900, elite: true,
     doctrine: '방어', doctrineDesc: '두꺼운 보호막 뒤에서 레이저로 버틴다',
     deck: ['heavyShield', 'regenShield', 'shield', 'laser', 'laser', 'laser', 'railgun', 'torpedo', 'torpedo', 'pointDefense', 'fallback', 'burn'],
   },
   resolute: {
-    name: '순양함 「단호」', hull: 120, reactor: 5, cooling: 14, prefer: 1500, flagship: true,
+    name: '순양함 「단호」', hull: 120, reactor: 5, cooling: 10, prefer: 1500, flagship: true,
     doctrine: '저격', doctrineDesc: '멀리서 레일건으로 쏜다. 품으로 파고들어라',
     deck: ['railgun', 'railgun', 'railgun', 'laser', 'solarLance', 'torpedo', 'torpedo', 'retro', 'retro', 'heavyShield', 'shield', 'ventPurge', 'pointDefense'],
   },

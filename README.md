@@ -1,4 +1,4 @@
-# DEAD RECKONING — 100m의 심리전
+# DEAD RECKONING — 100km의 심리전
 
 우주 함선 카드 심리전. 기획서: `기획/01_기획서.md`
 

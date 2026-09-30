@@ -279,7 +279,7 @@ const Scene = {
       }
       this.after(0.3, () => (miss ? this.effLabel(to, 0) : this.impact(to, e)));
     } else if (e.card === 'solarLance') {
-      // 태양열 응집: 굵은 황금빛 광선 + 화면 번쩍
+      // 초고열 응집: 굵은 황금빛 광선 + 화면 번쩍
       this.beams.push({ from, to, kind: 'laser', color: '#FFC24A', life: 0.7, max: 0.7, miss: false, wide: true });
       this.flash(a.x, a.y, 60, '#FFE2A0', 0.4);
       this.streak(a.x, a.y, 420, '#FFD27A', 0.5);
@@ -306,12 +306,12 @@ const Scene = {
     }
   },
 
-  // 태양열 응집 충전 시작: 함선 둘레에 빛이 모임
+  // 초고열 응집 충전 시작: 함선 둘레에 빛이 모임
   animChargeStart(e) {
     const p = this.pos(e.from);
     this.flash(p.x, p.y, 80, '#FFC24A', 0.6);
     this.ring(p.x, p.y, 70, '#FFC24A', 0.7);
-    this.text(p.x, p.y + 70, `태양열 응집 — ${e.turns}턴 뒤 발사`, '#FFC24A', 14);
+    this.text(p.x, p.y + 70, `초고열 응집 — ${e.turns}턴 뒤 발사`, '#FFC24A', 14);
   },
 
   animTorpLaunch(e) {
@@ -614,8 +614,8 @@ const Scene = {
     const now = S.lock > 0.5 ? Math.round(this.dist / 100) * 100 : measured;
     const after = this.ghost !== null && this.ghost !== undefined ? this.ghost : null;
     line('RANGE', y + 34, "700 11px Consolas, monospace", 'rgba(255,181,71,0.7)');
-    line(now.toLocaleString() + 'm', y + 62, "900 30px Consolas, monospace", '#FFB547');
-    line(bandOf(now) + (after !== null ? `  →  이동 후 ${after.toLocaleString()}m` : ''), y + 82, "700 12px 'Malgun Gothic', sans-serif", after !== null ? '#5CE1E6' : 'rgba(230,237,247,0.75)');
+    line(now.toLocaleString() + 'km', y + 62, "900 30px Consolas, monospace", '#FFB547');
+    line(bandOf(now) + (after !== null ? `  →  이동 후 ${after.toLocaleString()}km` : ''), y + 82, "700 12px 'Malgun Gothic', sans-serif", after !== null ? '#5CE1E6' : 'rgba(230,237,247,0.75)');
     if (info) {
       line(S.lock > 0.5 ? info.text : `${DATA.cards[weapon.id].name} — 적 함선에 조준`, y + 108, "900 16px 'Malgun Gothic', sans-serif", S.lock > 0.5 ? info.color : 'rgba(230,237,247,0.8)');
       if (S.lock > 0.5 && info.sub) line(info.sub, y + 126, "700 11px 'Malgun Gothic', sans-serif", 'rgba(230,237,247,0.7)');
@@ -638,9 +638,9 @@ const Scene = {
     g.textAlign = 'center'; g.textBaseline = 'alphabetic';
     g.font = "900 26px Consolas, monospace";
     g.lineWidth = 5; g.strokeStyle = 'rgba(0,0,0,0.85)';
-    g.strokeText(d.toLocaleString() + 'm', mx, my);
+    g.strokeText(d.toLocaleString() + 'km', mx, my);
     g.fillStyle = '#FFB547'; g.shadowColor = 'rgba(255,181,71,0.6)'; g.shadowBlur = 12;
-    g.fillText(d.toLocaleString() + 'm', mx, my);
+    g.fillText(d.toLocaleString() + 'km', mx, my);
     g.shadowBlur = 0;
     g.font = "700 12px 'Malgun Gothic', sans-serif";
     g.strokeText(bandOf(d), mx, my + 17);
@@ -709,7 +709,7 @@ const Scene = {
     }
   },
 
-  // 거리계 레이저선: 내 함선 뱃머리 → 조준경 가운데. 100m마다 눈금, 500m마다 숫자.
+  // 거리계 레이저선: 내 함선 뱃머리 → 조준경 가운데. 100km마다 눈금, 500km마다 숫자.
   // 들고 있는 무기가 강한 구간은 선 밑에 초록, 약한 구간은 주황. 돌려주는 값 = 선으로 잰 거리
   drawRangeLine(g, x, y, R, weapon, alpha = this.scope.k, lockF = this.scope.lock) {
     const z = this.z0 * this.cam.z;
@@ -717,7 +717,7 @@ const Scene = {
     const dx = x - src.x, dy = y - src.y, L = Math.hypot(dx, dy);
     if (L < 20) return 0;
     const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
-    // 100m = 몇 픽셀. 적에게 잠기면 조준경 가운데가 정확히 실제 거리가 되도록 맞춤
+    // 100km = 몇 픽셀. 적에게 잠기면 조준경 가운데가 정확히 실제 거리가 되도록 맞춤
     const free = ((this.sep(DATA.rules.maxDistance) - this.sep(0)) / (DATA.rules.maxDistance / 100)) * z;
     const locked = this.dist >= 100 ? L / (this.dist / 100) : free;
     const per100 = free + (locked - free) * lockF;
@@ -828,7 +828,7 @@ const Scene = {
     g.save(); g.translate(cruise ? W * 0.72 : px, cruise ? H * 0.7 : py); g.scale(cruise ? ps * 0.8 : ps, cruise ? ps * 0.8 : ps); this.drawShip(g, 'player'); g.restore();
     this.posOverride = null;
     if (cruise) { this.drawFront(g, W, H); return; }
-    // 거리계 레이저: 6초마다 쏘아 1,200m를 잼
+    // 거리계 레이저: 6초마다 쏘아 1,200km를 잼
     const cyc = t % 6, grow = Math.min(1, cyc / 1.1), fade = cyc < 4.4 ? 1 : Math.max(0, 1 - (cyc - 4.4) / 0.8);
     if (fade > 0) {
       const ax = px + 82 * ps, ay = py - 1 * ps, bx = ex - 78 * es, by = ey;
@@ -854,9 +854,9 @@ const Scene = {
         const mx = (ax + bx) / 2 - nx * 34, my = (ay + by) / 2 - ny * 34;
         g.font = "900 26px Consolas, monospace";
         g.lineWidth = 5; g.strokeStyle = 'rgba(0,0,0,0.8)';
-        g.strokeText('1,200m', mx, my);
+        g.strokeText('1,200km', mx, my);
         g.fillStyle = '#FFB547'; g.shadowColor = 'rgba(255,181,71,0.7)'; g.shadowBlur = 14;
-        g.fillText('1,200m', mx, my);
+        g.fillText('1,200km', mx, my);
         g.shadowBlur = 0;
         // 적에 조준 틀
         g.strokeStyle = 'rgba(255,90,95,0.9)'; g.lineWidth = 2;
@@ -973,7 +973,7 @@ const Scene = {
     g.fillRect(-20, -20, W + 40, H + 40);
   },
 
-  // ── 측정선: 두 함선 사이 100m 눈금 + 거리 숫자 + 무기 사거리 구간 + 적 예상 위치 ──
+  // ── 측정선: 두 함선 사이 100km 눈금 + 거리 숫자 + 무기 사거리 구간 + 적 예상 위치 ──
   // 내가 제자리일 때 적이 거리 m에 있으면 그 적의 뱃머리 x
   axisX(m) { return this.nose('enemy').x + (this.sep(m) - this.sep(this.dist)); },
 
@@ -1002,7 +1002,7 @@ const Scene = {
       }
     }
 
-    // 선 + 100m 눈금
+    // 선 + 100km 눈금
     g.strokeStyle = 'rgba(255,181,71,0.55)';
     g.lineWidth = 1.5;
     g.setLineDash([6, 5]);
@@ -1026,7 +1026,7 @@ const Scene = {
     const cx = (x0 + x1) / 2;
     g.font = "900 30px Consolas, monospace";
     g.lineWidth = 5; g.strokeStyle = 'rgba(0,0,0,0.7)';
-    const label = d.toLocaleString() + 'm';
+    const label = d.toLocaleString() + 'km';
     g.strokeText(label, cx, y + 36);
     g.fillStyle = '#FFB547';
     g.shadowColor = 'rgba(255,181,71,0.6)'; g.shadowBlur = 14;
@@ -1057,7 +1057,7 @@ const Scene = {
       g.font = "700 12px 'Malgun Gothic', sans-serif";
       g.textAlign = 'center';
       g.fillStyle = '#5CE1E6';
-      if (!this.aim) g.fillText(`내 이동 후 ${this.ghost.toLocaleString()}m (적이 가만히 있다면)`, gx, y - 22);
+      if (!this.aim) g.fillText(`내 이동 후 ${this.ghost.toLocaleString()}km (적이 가만히 있다면)`, gx, y - 22);
     }
     g.restore();
   },
