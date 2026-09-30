@@ -158,7 +158,7 @@ function renderHud() {
   const planning = B.phase === 'plan' && !resolving;
   statUpdate('player', planning ? planSummary(P, P.plan).heatAfter : undefined);
   statUpdate('enemy');
-  $('steps').innerHTML = ['시스템', '선제', '기동', '방어', '공격', '열'].map((n, i) => `<span class="${stepName === n ? 'on' : ''}">${'①②③④⑤⑥'[i]} ${n}</span>`).join('');
+  $('steps').innerHTML = ['특수능력', '시스템', '선제', '기동', '방어', '공격', '열'].map((n, i) => `<span class="${stepName === n ? 'on' : ''}">${'①②③④⑤⑥⑦'[i]} ${n}</span>`).join('');
   $('distLbl').innerHTML = `거리 <b>${fmtM(B.distance)}</b> · ${bandOf(B.distance)} <small>(적 함선에 마우스 → 조준경)</small>`;
   $('torps').innerHTML = B.torpedoes.map((t) => `<span class="${t.owner === P ? 'me' : 'foe'}">${t.owner === P ? '▶ 내 어뢰' : '◀ 적 어뢰'} 비행 중</span>`).join(' · ');
 }
@@ -697,7 +697,7 @@ function showHelp() {
     <h1>규칙</h1>
     <ul>
       <li><b>몰래 고르고 동시에 공개.</b> 손패에서 카드를 골라 계획을 세우고 [결정]. 적도 같은 순간 몰래 고른다.</li>
-      <li><b>단계별 공개 · 처리: ① 시스템 → ② 선제 → ③ 기동 → ④ 방어 → ⑤ 공격 → ⑥ 열.</b> 카드는 계획 때 모두 정하고, 공개만 단계마다 한다 (공개 중엔 못 바꾼다). 기동이 공격보다 먼저라서, 공격은 <b>바뀐 거리</b>로 판정된다. 상대가 어디로 갈지 추측하라.</li>
+      <li><b>단계별 공개 · 처리: ① 특수능력(오버드라이브) → ② 시스템 → ③ 선제 → ④ 기동 → ⑤ 방어 → ⑥ 공격 → ⑦ 열.</b> 카드는 계획 때 모두 정하고, 공개만 단계마다 한다 (공개 중엔 못 바꾼다). 기동이 공격보다 먼저라서, 공격은 <b>바뀐 거리</b>로 판정된다. 상대가 어디로 갈지 추측하라.</li>
       <li><b>거리</b> 0 ~ 2,000km. 다음 거리 = 지금 − 내 전진 − 적 전진. 무기마다 강한 거리가 다르다. <b>적 함선에 마우스를 올리면 조준경</b>이 뜬다 (거리 · 거리 자).</li>
       <li><b>카드 사용:</b> 무기는 <b>끌어서 적 함선에 조준</b> — 저격 조준경 안의 거리 자에 강한 거리(초록)가, 옆에 예상 피해가 보인다. 방어 · 기동 카드는 <b>내 함선에 끌어다 놓기</b>. 넣은 카드는 클릭하면 뺀다.</li>
       <li>무기가 맞으면 <b>예측 판정</b>이 뜬다: 효율 90%↑ 예측 적중 · 60%↑ 유효 사격 · 그 아래는 빗나간 예측.</li>

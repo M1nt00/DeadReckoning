@@ -157,7 +157,7 @@ function efficiency(card, d) {
 }
 
 // ── 처리: 단계별 공개 · 처리 (화면이 한 단계씩 공개하고 보여줌) ──
-// 순서: 시스템 → 선제 → 기동 → 방어 → 공격 → 열   (기획서 v0.8 15번. 특수능력 · 전장은 아직 없음)
+// 순서: 특수능력 → 시스템 → 선제 → 기동 → 방어 → 공격 → 열   (기획서 v0.8 15번. 특수능력 = 지금은 오버드라이브 · 전장은 아직 없음)
 // 각 단계: reveal(s) = 그 단계에 공개할 계획 항목 (양쪽 다 없으면 공개 생략), run() = 처리
 const isPre = (c) => !!c.preempt && (c.type === 'weapon' || c.type === 'defense');   // 선제: 무기 · 방어에만
 
@@ -243,6 +243,13 @@ function resolveSteps(B) {
 
   const reveal = (f) => (s) => itemsOf(s, f);
   return [
+    // ⓪ 특수능력 — 지금은 오버드라이브 (연료 +3은 계획 때, 무기 +50%는 사격 때, 열 +30은 열 단계에 반영)
+    { name: '특수능력', reveal: () => [], od: (s) => sums.get(s).od, run() {
+      for (const s of ships) if (sums.get(s).od) {
+        ev({ kind: 'overdrive', who: side(s) });
+        B.log.push({ t: 'heat', text: `${who(s)} 오버드라이브 가동 — 이번 턴 무기 피해 +${Math.round(R().overdriveBonus * 100)}%` });
+      }
+    } },
     // ① 시스템 — 가장 먼저 처리되어 이번 턴의 규칙을 바꿈
     { name: '시스템', reveal: reveal((c) => c.type === 'system'), run() {
       for (const s of ships) for (const c of cardsOf(s, (c) => c.type === 'system')) {
@@ -276,7 +283,7 @@ function resolveSteps(B) {
       }
     } },
     // ⑤ 공격 — 도착하는 어뢰 · 충전 끝난 초고열 응집(일제 사격 0) → 무기
-    { name: '공격', reveal: reveal((c) => c.type === 'weapon' && !isPre(c)), od: (s) => sums.get(s).od, run() {
+    { name: '공격', reveal: reveal((c) => c.type === 'weapon' && !isPre(c)), run() {
       const d = B.distance;
       const arriving = B.torpedoes;
       B.torpedoes = [];
