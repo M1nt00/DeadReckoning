@@ -331,6 +331,50 @@ const Scene = {
         this.text(p.x, p.y - 40, '강습! 보호막 무시', '#9FE870', 15);
         this.impact(to, e);
       });
+    } else if (e.card === 'orbitShot') {
+      // 궤도 예측 사격: 크게 휘어 도는 궤도탄 (상대가 움직였으면 '궤도 예측 적중')
+      const bonus = e.dmg && DATA.cards.orbitShot.trackMove && e.dmg >= DATA.cards.orbitShot.trackMove.dmg;
+      this.flash(a.x, a.y, 24, '#9FD8FF', 0.2);
+      this.ring(a.x, a.y, 30, '#9FD8FF', 0.4);
+      this.shots.push({ kind: 'orbit', x0: a.x, y0: a.y, x1: b.x + rand(-10, 10), y1: b.y + rand(-6, 6), arc: 110, t: 0, dur: 0.55, color: '#9FD8FF', trail: [],
+        onHit: () => {
+          if (miss) return this.effLabel(to, 0);
+          const p = this.pos(to);
+          if (bonus) { this.text(p.x, p.y - 44, '궤도 예측 적중!', '#9FD8FF', 16); this.ring(p.x, p.y, 70, '#9FD8FF', 0.5); }
+          this.impact(to, e);
+        } });
+    } else if (e.card === 'guidedMissile') {
+      // 유도 미사일: 휘어서 날아가는 미사일 (상대가 크게 움직였으면 빗나가 흘러감)
+      this.flash(a.x, a.y, 22, '#FFB547', 0.2);
+      this.smoke(a.x, a.y, 4, 8, 0.8);
+      const tx = miss ? b.x + (to === 'enemy' ? 260 : -260) : b.x, ty = miss ? b.y - 90 : b.y;
+      this.shots.push({ kind: 'missile', x0: a.x, y0: a.y, x1: tx, y1: ty, arc: -60, t: 0, dur: miss ? 0.7 : 0.5, color: '#FFB547', trail: [], fade: miss,
+        onHit: () => {
+          if (miss) { const p = this.pos(to); this.text(p.x, p.y - 40, '회피됨', '#FFB547', 15); return this.effLabel(to, 0); }
+          const p = this.pos(to); this.flash(p.x, p.y, 50, '#FFB547', 0.3); this.spark(p.x, p.y, '#FFB547', 14, 240, 0.4);
+          this.impact(to, e);
+        } });
+    } else if (e.card === 'phaseLaser') {
+      // 위상 가속 레이저: 보랏빛 굵은 광선 + 위상 고리
+      this.beams.push({ from, to, kind: 'laser', color: '#B28CFF', life: 0.55, max: 0.55, miss, wide: true, width: 20 });
+      this.flash(a.x, a.y, 40, '#D9C6FF', 0.3);
+      this.streak(a.x, a.y, 300, '#B28CFF', 0.4);
+      for (let i = 0; i < 3; i++) this.after(i * 0.07, () => { const k = 0.25 + i * 0.25, x = lerp(a.x, b.x, miss ? k * 0.55 : k); this.ring(x, lerp(a.y, b.y, k), 22, '#B28CFF', 0.35); });
+      if (miss) this.after(0.1, () => this.effLabel(to, 0));
+      else this.after(0.12, () => this.impact(to, e));
+    } else if (e.card === 'particleCutter') {
+      // 입자 절단기: 짧고 아주 밝은 절단 광선 + 불꽃 (관통)
+      this.ships[from].kick = 6;
+      this.beams.push({ from, to, kind: 'laser', color: '#7CFFE0', life: 0.5, max: 0.5, miss, wide: true, width: 16 });
+      this.flash(a.x, a.y, 34, '#E0FFF7', 0.25);
+      this.screenFlash(0.12, '#C8FFF2');
+      this.after(0.08, () => {
+        if (miss) return this.effLabel(to, 0);
+        const p = this.pos(to);
+        this.spark(p.x, p.y, '#7CFFE0', 26, 320, 0.5);
+        this.text(p.x, p.y - 40, '관통!', '#7CFFE0', 15);
+        this.impact(to, e);
+      });
     } else if (e.card === 'ram') {
       const S = this.ships[from];
       this.tween(0.5, (k) => { S.lunge = Math.sin(k * Math.PI) * 60; });
@@ -338,6 +382,11 @@ const Scene = {
         if (!miss) { this.impact(to, e); if (e.self) this.impact(from, Object.assign({ eff: 1 }, e.self), false); }
         else this.effLabel(to, 0);
       });
+    } else {
+      // 연출이 아직 없는 무기: 기본 탄 (피해 표시는 꼭 되도록)
+      this.flash(a.x, a.y, 22, col, 0.2);
+      this.shots.push({ kind: 'rail', x0: a.x, y0: a.y, x1: miss ? b.x + (to === 'enemy' ? 500 : -500) : b.x, y1: b.y, t: 0, dur: 0.3, color: col, trail: [],
+        onHit: miss ? () => this.effLabel(to, 0) : () => this.impact(to, e) });
     }
   },
 
@@ -483,7 +532,7 @@ const Scene = {
     for (const s of this.shots) {
       s.t += dt;
       const k = Math.min(1, s.t / s.dur);
-      s.x = lerp(s.x0, s.x1, k); s.y = lerp(s.y0, s.y1, k);
+      s.x = lerp(s.x0, s.x1, k); s.y = lerp(s.y0, s.y1, k) - (s.arc || 0) * Math.sin(k * Math.PI);
       s.trail.push({ x: s.x, y: s.y });
       if (s.trail.length > 8) s.trail.shift();
       if (k >= 1) { s.done = true; if (s.onHit) s.onHit(); }
@@ -1385,7 +1434,7 @@ const Scene = {
         x1 = b.miss ? lerp(a.x, t.x, 0.55) : t.x + (b.to === 'enemy' ? -30 : 30); y1 = b.miss ? a.y : t.y;
       }
       const fl = 0.7 + 0.3 * Math.sin(this.time * 60);
-      g.strokeStyle = b.color; g.globalAlpha = 0.35 * k * fl; g.lineWidth = b.kind === 'pd' ? 3 : b.wide ? 30 : 12;
+      g.strokeStyle = b.color; g.globalAlpha = 0.35 * k * fl; g.lineWidth = b.kind === 'pd' ? 3 : b.wide ? (b.width || 30) : 12;
       g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
       g.strokeStyle = '#FFFFFF'; g.globalAlpha = k; g.lineWidth = b.kind === 'pd' ? 1 : b.wide ? 6 : 2.5;
       g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
@@ -1393,11 +1442,16 @@ const Scene = {
     for (const s of this.shots) {
       g.globalAlpha = s.fade ? 1 - s.t / s.dur : 1;
       g.strokeStyle = s.color;
-      g.lineWidth = s.kind === 'rail' ? 4 : 1.6;
+      g.lineWidth = s.kind === 'rail' ? 4 : s.kind === 'missile' || s.kind === 'orbit' ? 3 : 1.6;
       g.beginPath();
       s.trail.forEach((pt, i) => (i ? g.lineTo(pt.x, pt.y) : g.moveTo(pt.x, pt.y)));
       g.stroke();
       if (s.kind === 'rail') { g.fillStyle = '#FFFFFF'; g.beginPath(); g.arc(s.x, s.y, 3.5, 0, 6.28); g.fill(); }
+      if (s.kind === 'missile' || s.kind === 'orbit') {           // 밝은 머리
+        g.fillStyle = s.kind === 'orbit' ? '#E8F6FF' : '#FFF1C8';
+        g.beginPath(); g.arc(s.x, s.y, s.kind === 'orbit' ? 4.5 : 3.5, 0, 6.28); g.fill();
+        g.globalAlpha *= 0.35; g.fillStyle = s.color; g.beginPath(); g.arc(s.x, s.y, 11, 0, 6.28); g.fill();
+      }
     }
     for (const p of this.parts) {
       const k = p.life / p.max;
