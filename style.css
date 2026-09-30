@@ -595,3 +595,12 @@ body.onVoyage #top, body.onVoyage #field, body.onVoyage #tray, body.onVoyage #lo
 
 /* '없음'은 뒤집지 않고 그대로 */
 #reveal .rcard.none { animation: none !important; }
+
+/* 함선 이름: 선체 막대 위 (모서리 계기판은 없앰) */
+.shipStat.top { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.shipStat .ssRow { display: flex; align-items: center; gap: 7px; }
+.shipStat.enemy .ssRow { flex-direction: row-reverse; }
+.shipStat.enemy.top { flex-direction: column; }
+.ssName { font-size: 13px; font-weight: 900; letter-spacing: 1px; text-shadow: 0 0 6px #000, 0 1px 2px #000; white-space: nowrap; }
+.shipStat.player .ssName { color: var(--me); }
+.shipStat.enemy .ssName { color: var(--foe); }

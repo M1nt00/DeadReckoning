@@ -58,37 +58,6 @@ function expectedDmg(P) {
   return { dmg: t, torps, d };
 }
 
-// 최근 기동 기록: ▶ 전진 · ◀ 후진 · ■ 정지 (오래된 것 → 최근)
-function moveHistHTML(s) {
-  if (!s.moveHist.length) return '<span class="mh none">기록 없음</span>';
-  const fog = B && B.fog && s.side === 'enemy';
-  const hist = fog ? s.moveHist.slice(-2) : s.moveHist;       // 성운: 최근 2번만
-  return (fog && s.moveHist.length > 2 ? '<span class="mh none">성운 ··</span>' : '') + hist.map((m, i) => {
-    const last = i === hist.length - 1;
-    const t = m > 0 ? `▶${m * 100}` : m < 0 ? `◀${-m * 100}` : '■';
-    return `<span class="mh ${m > 0 ? 'fwd' : m < 0 ? 'back' : 'hold'} ${last ? 'last' : ''}">${t}</span>`;
-  }).join('');
-}
-
-// ── 모서리 계기판: 이름 · 오버드라이브 · 읽을 단서 (선체 · 열 · 상태는 함선에 붙음) ──
-function hudBuild(el) {
-  el.innerHTML = `
-    <div class="hrow"><span class="hname"></span><span class="tags"></span></div>
-    <div class="intel"></div>`;
-  el.dataset.built = '1';
-}
-
-function hudUpdate(el, s) {
-  if (!el.dataset.built) hudBuild(el);
-  const q = (c) => el.querySelector(c);
-  q('.hname').textContent = s.name;
-  q('.tags').innerHTML = s.odCooldown === 0 ? '<span class="tag od">⚡ OD 준비됨</span>' : `<span class="tag">OD 충전 ${s.odCooldown}턴</span>`;
-  // 읽을 단서
-  q('.intel').innerHTML =
-    (s.side === 'enemy' && s.doctrine ? `<div><span class="lbl">교리</span><span class="tag doc" title="${s.doctrineDesc || ''}">${s.doctrine} · 선호 ${s.preferJitter ? `${fmtM(s.preferBase)} ±${s.preferJitter}` : fmtM(s.prefer)}</span></div>` : '') +
-    `<div><span class="lbl">기동</span>${moveHistHTML(s)}</div>`;
-}
-
 // ── 함선에 붙은 상태 표시 ─────────────────────
 // 위: 선체 막대 (보호막은 막대 위에 덧칠 + 방패 숫자) · 아래: 열 막대 (단계 눈금) + 상태 칸 (마우스 → 설명)
 const statEl = {};
@@ -96,9 +65,12 @@ function statBuild(side) {
   const top = document.createElement('div');
   top.className = `shipStat top ${side}`;
   top.innerHTML = `
-    <b class="ssHp"></b>
-    <div class="ssBar"><i class="trail"></i><i class="fill"></i><i class="shOver"></i><span class="ticks"></span></div>
-    <span class="ssShield"></span>`;
+    <div class="ssName"></div>
+    <div class="ssRow">
+      <b class="ssHp"></b>
+      <div class="ssBar"><i class="trail"></i><i class="fill"></i><i class="shOver"></i><span class="ticks"></span></div>
+      <span class="ssShield"></span>
+    </div>`;
   const bot = document.createElement('div');
   bot.className = `shipStat bot ${side}`;
   bot.innerHTML = `
@@ -134,6 +106,7 @@ function statUpdate(side, ghostHeat) {
   const E = statEl[side], s = B[side], v = Scene.ships[side], r = DATA.rules;
   const hp = v.hp !== undefined ? v.hp : s.hull, sh = v.sh !== undefined ? v.sh : s.shield;
   const q = (el, c) => el.querySelector(c);
+  q(E.top, '.ssName').textContent = s.name;
   q(E.top, '.ssHp').textContent = hp;
   q(E.top, '.fill').style.width = (hp / s.maxHull) * 100 + '%';
   q(E.top, '.ticks').style.backgroundSize = `${(20 / s.maxHull) * 100}% 100%`;   // 20칸마다 눈금
@@ -183,8 +156,6 @@ Scene.onFrame = () => {
 function renderHud() {
   const P = B.player;
   const planning = B.phase === 'plan' && !resolving;
-  hudUpdate($('hudPlayer'), P);
-  hudUpdate($('hudEnemy'), B.enemy);
   statUpdate('player', planning ? planSummary(P, P.plan).heatAfter : undefined);
   statUpdate('enemy');
   $('steps').innerHTML = ['시스템', '선제', '기동', '방어', '공격', '열'].map((n, i) => `<span class="${stepName === n ? 'on' : ''}">${'①②③④⑤⑥'[i]} ${n}</span>`).join('');
@@ -735,7 +706,7 @@ function showHelp() {
       <li><b>기본 엔진</b>은 카드 없이 언제나: 연료 1당 100km · 열 +5, <b>연료가 허락하는 만큼</b> 멀리 (←/→ 100km, Shift+←/→ 500km). 급가속 · 역분사 카드는 연료 2로 500km — 싸지만 뜨겁다.</li>
       <li><b>시스템 카드 (보라색)</b>: 내 함선에 놓으면 공개 때 <b>가장 먼저, 크게</b> 공개되고 발동해 그 턴의 규칙을 바꾼다 (예: 강제 배기 = 곧바로 열 −40).</li>
       <li><b>선제</b>가 붙은 무기 · 방어 카드는 기동보다 먼저 쓰인다. 선제 무기는 <b>상대가 움직이기 전의 거리</b>로 맞히고, 선제 방어는 기동 단계부터 막는다.</li>
-      <li><b>⚡ 오버드라이브</b>는 비장의 한 수 (O): 이번 턴 연료 +3 · <b>무기 피해 +50%</b> · 열 +30. 쓰고 나면 4턴 충전. 적의 충전 상태도 보인다.</li>
+      <li><b>⚡ 오버드라이브</b>는 비장의 한 수 (O): 이번 턴 연료 +3 · <b>무기 피해 +50%</b> · 열 +30. 쓰고 나면 4턴 충전. 적이 언제 다시 쓸 수 있는지는 보이지 않는다 — 기억하라.</li>
       <li><b>열</b> 매 턴 냉각기가 −10. 50↑ 보호막 약화 · 80↑ 다음 턴 최대 연료 −1 · 100 멜트다운(선체 −30, 다음 턴은 기본 엔진으로 이동만 — 그 턴이 끝나면 열 40).</li>
       <li><b>교란</b>: 다음 턴 손패 1장이 잠긴다 (군사작전). 걸릴 때마다 쌓이고, 턴마다 1씩 줄어든다.</li>
       <li>공격은 <b>일제 사격</b> 단위: 도착 어뢰 → (내 1발째 + 적 1발째) → (내 2발째 + 적 2발째) … <b>한쪽이 0이 되는 순간 끝</b> — 남은 사격은 없다. 같은 일제 사격에서 <b>둘 다 격침</b>되면 무승부 (항해에선 패배).</li>

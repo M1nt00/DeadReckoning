@@ -211,8 +211,6 @@ const Voyage = {
     if (r.enemy) {
       const e = DATA.ships[r.enemy];
       body = `<div class="vrEnemy">${e.name}</div>
-        <div class="vrDoc">교리 <b>${e.doctrine}</b> · 선호 <b>${e.prefer.toLocaleString()}km${e.preferJitter ? ' ±' + e.preferJitter : ''}</b></div>
-        <div class="vrDesc">${e.doctrineDesc}</div>
         <div class="vrReward">보상 · ${r.reward.map((x) => RW[x]).join(' + ')}</div>`;
     } else if (r.type === 'event') {
       body = `<div class="vrEnemy">???</div><div class="vrDesc">무언가가 신호를 보내고 있다. 전투는 없을지도 모른다.</div><div class="vrReward">보상 · 선택에 따라</div>`;
@@ -461,8 +459,7 @@ const Voyage = {
       <div class="vRoutes"><div class="vRoute t-flag">
         <div class="vrKey">1</div><div class="vrType">기함</div><div class="vrPlace">${ch.name} 심층부</div>
         <div class="vrEnemy">${e.name}</div>
-        <div class="vrDoc">교리 <b>${e.doctrine}</b> · 선호 <b>${e.prefer.toLocaleString()}km</b> · 선체 <b>${Math.round(e.hull * (this.V.endless ? ch.bossHull : 1))}</b></div>
-        <div class="vrDesc">${e.doctrineDesc}</div>
+        <div class="vrDoc">선체 <b>${Math.round(e.hull * (this.V.endless ? ch.bossHull : 1))}</b></div>
       </div></div>
       <div class="vHint">접근한다 (클릭 또는 1 · Enter)</div>`);
     let went = false;
