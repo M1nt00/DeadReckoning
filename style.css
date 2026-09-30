@@ -615,3 +615,12 @@ body.onVoyage #top, body.onVoyage #field, body.onVoyage #tray, body.onVoyage #lo
 .card[data-type=system] .cart { color: var(--system); }
 
 .card .ctext.long { font-size: 11.5px; line-height: 1.4; }
+
+/* 전장 카드 (황토) */
+:root { --field: #E6B873; }
+.card[data-type=field] .cart { color: var(--field); background: radial-gradient(ellipse at 50% 60%, rgba(230,184,115,0.28), rgba(60,40,12,0.4) 70%); }
+.card[data-type=field] .ctype { color: var(--field); }
+.chip[data-type=field] { border-color: rgba(230,184,115,0.6); }
+.rcard[data-type=field] { border-color: rgba(230,184,115,0.8); } .rcard[data-type=field] .ri { color: var(--field); }
+.dtype[data-type=field] { color: var(--field); }
+.pileItem[data-type=field] .ri { color: var(--field); }

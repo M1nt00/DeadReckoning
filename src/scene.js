@@ -69,6 +69,8 @@ const Scene = {
 
   reset(d) {
     this.dist = d;
+    this.xP = 0; this.xE = d;          // 함선 위치 (km) — 전장 구역을 그릴 때 기준
+    this.fields = []; this.fieldGhost = null;
     const ship = () => ({ flame: 0, retro: 0, heat: 0, shieldOn: 0, shieldAmt: 0, shieldFlash: 0, pd: 0, hullFlash: 0, kick: 0, lunge: 0, hull: 1, dead: false, smokeT: 0, hp: undefined, max: 1, sh: 0, trail: 0, trailWait: 0, plateFlash: 0 });
     this.ships = { player: ship(), enemy: ship() };
     this.parts = []; this.texts = []; this.beams = []; this.shots = []; this.torps = []; this.timers = []; this.tweens = [];
@@ -124,6 +126,14 @@ const Scene = {
     const y = F.y + F.h * 0.56 + (side === 'player' ? 8 : -8) + Math.sin(this.time * 0.9 + (side === 'player' ? 0 : 2)) * 3;   // 조금 아래: 위쪽 계기판 · 선체 막대 자리
     return { x, y };
   },
+  // 우주 위치(km) → 화면 x: 두 함선 사이는 비율로, 바깥은 같은 배율로
+  worldX(x) {
+    const P = this.pos('player').x, E = this.pos('enemy').x, xp = this.xP, xe = this.xE;
+    const k = (this.sep(DATA.rules.maxDistance) - this.sep(0)) / DATA.rules.maxDistance;   // 1km = 몇 픽셀
+    if (x <= xp) return P - (xp - x) * k;
+    if (x >= xe) return E + (x - xe) * k;
+    return P + ((x - xp) / Math.max(1, xe - xp)) * (E - P);
+  },
   design(side) { return Art.design[this.skin[side]] || Art.design.vex; },
   nose(side) { const p = this.pos(side), k = this.design(side).scale || 1; return { x: p.x + (side === 'player' ? 80 : -78) * k, y: p.y - 1 }; },
   other(side) { return side === 'player' ? 'enemy' : 'player'; },
@@ -172,6 +182,19 @@ const Scene = {
       if (e.kind === 'evade') this.after(t, () => { const p = this.pos(e.who); this.text(p.x, p.y + 64, `물러나기 · 피해 −${e.pct}%`, '#9DB8FF', 14); this.ring(p.x, p.y, 90, '#9DB8FF', 0.5); });
       if (e.kind === 'heat') this.after(t, () => { this.ships[e.who].heat = e.heat; if (e.overdrive) this.vent(e.who); });
       if (e.kind === 'meltdown') { this.after(t, () => this.animMeltdown(e.who)); t += 1.1; }
+      if (e.kind === 'field') {                 // 전장 전개: 구역에서 빛이 퍼짐
+        this.after(t, () => { const cx = (this.worldX(e.lo) + this.worldX(e.hi)) / 2, cy = (this.pos('player').y + this.pos('enemy').y) / 2; this.ring(cx, cy, 160, '#E6B873', 0.7); this.text(cx, cy - 40, `${e.name} 전개 · 다음 턴부터`, '#F2D29B', 15); });
+        t += 0.7;
+      }
+      if (e.kind === 'fieldHit') {              // 전장 피해: 소행성 충돌
+        this.after(t, () => {
+          const p = this.pos(e.who);
+          this.debris(p.x, p.y, 16); this.spark(p.x, p.y, '#E6B873', 18, 220, 0.5); this.shake = Math.max(this.shake, 8);
+          this.setStat(e.who, e.hull || 0, this.ships[e.who].sh - (e.shield || 0));
+          this.text(p.x, p.y - 30, `${e.name} −${e.dmg}`, '#F2D29B', 17);
+        });
+        t += 0.7;
+      }
       if (e.kind === 'overdrive') {             // 오버드라이브 가동: 주황 분출
         this.after(t, () => { const p = this.pos(e.who); this.vent(e.who); this.ring(p.x, p.y, 120, '#FF7A3A', 0.6); this.text(p.x, p.y - 20, '오버드라이브', '#FFB547', 16); });
         t += 0.6;
@@ -195,8 +218,10 @@ const Scene = {
     P.flame = e.pm > 0 ? 1 : 0; P.retro = e.pm < 0 ? 1 : 0;
     E.flame = e.em > 0 ? 1 : 0; E.retro = e.em < 0 ? 1 : 0;
     if (e.pm || e.em) { this.camT = { x: 0, y: 0, z: 0.94 }; this.after(1.0, () => this.camReset(1.03)); }
-    this.tween(0.95, (k) => { this.dist = lerp(from, to, ease(k)); }, () => {
-      this.dist = to;
+    const xP0 = e.xP0 !== undefined ? e.xP0 : this.xP, xE0 = e.xE0 !== undefined ? e.xE0 : this.xE;
+    const xP1 = e.xP !== undefined ? e.xP : xP0, xE1 = e.xE !== undefined ? e.xE : xE0;
+    this.tween(0.95, (k) => { const q = ease(k); this.dist = lerp(from, to, q); this.xP = lerp(xP0, xP1, q); this.xE = lerp(xE0, xE1, q); }, () => {
+      this.dist = to; this.xP = xP1; this.xE = xE1;
       P.flame = P.retro = E.flame = E.retro = 0;
     });
   },
@@ -397,6 +422,7 @@ const Scene = {
   // 전투 상태에서 보이는 값 맞추기 (턴 시작 등)
   sync(B) {
     this.skin.enemy = Art.design[B.enemy.key] ? B.enemy.key : 'vex';
+    if (B.xE !== undefined) { this.xP = B.xP; this.xE = B.xE; }
     for (const side of ['player', 'enemy']) {
       const s = B[side], v = this.ships[side];
       v.heat = s.heat;
@@ -515,6 +541,7 @@ const Scene = {
   },
 
   drawWorld(g, plates) {
+    this.drawFields(g);
     this.drawRange(g);
     g.globalAlpha = 1;
     for (const t of this.torps) this.drawTorp(g, t);
@@ -523,6 +550,45 @@ const Scene = {
     this.drawFx(g);
     g.globalAlpha = 1;
     // 선체 · 열 · 상태 · 계획한 카드 표식은 HTML로 함선에 붙임 (ui.js shipStat)
+  },
+
+  // ── 전장 구역 (우주에 고정된 띠 + 소행성) ──
+  drawFields(g) {
+    const list = (this.fields || []).concat(this.fieldGhost ? [this.fieldGhost] : []);
+    if (!list.length) return;
+    const cy = (this.pos('player').y + this.pos('enemy').y) / 2, h = 170;
+    const rnd = (i) => { const v = Math.sin(i * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
+    for (const f of list) {
+      const x1 = this.worldX(f.lo - 50), x2 = this.worldX(f.hi + 50), w = x2 - x1;
+      const col = f.side === 'player' ? '92,225,230' : '255,90,95';
+      g.save();
+      g.globalAlpha = f.ghost ? 0.55 : f.active ? 1 : 0.7;
+      const grad = g.createLinearGradient(0, cy - h / 2, 0, cy + h / 2);
+      grad.addColorStop(0, 'rgba(230,184,115,0)'); grad.addColorStop(0.5, 'rgba(230,184,115,0.13)'); grad.addColorStop(1, 'rgba(230,184,115,0)');
+      g.fillStyle = grad;
+      g.fillRect(x1, cy - h / 2, w, h);
+      // 경계선 (깐 쪽 색)
+      g.strokeStyle = `rgba(${col},0.75)`; g.lineWidth = 1.5; g.setLineDash([6, 5]);
+      g.beginPath(); g.moveTo(x1, cy - h / 2); g.lineTo(x1, cy + h / 2); g.moveTo(x2, cy - h / 2); g.lineTo(x2, cy + h / 2); g.stroke();
+      g.setLineDash([]);
+      // 소행성
+      const n = Math.max(6, Math.round(w / 14));
+      for (let i = 0; i < n; i++) {
+        const seed = i + (f.seed || 0);
+        const x = x1 + rnd(seed) * w, y = cy + (rnd(seed + 50) - 0.5) * (h - 20) + Math.sin(this.time * 0.6 + seed) * 2;
+        const r = 2 + rnd(seed + 99) * 5;
+        g.fillStyle = `rgba(${150 + rnd(seed + 7) * 60},${130 + rnd(seed + 8) * 40},${110 + rnd(seed + 9) * 30},0.9)`;
+        g.beginPath();
+        for (let a = 0; a < 7; a++) { const ang = (a / 7) * 6.283, rr = r * (0.7 + rnd(seed * 7 + a) * 0.5); g.lineTo(x + Math.cos(ang) * rr, y + Math.sin(ang) * rr); }
+        g.closePath(); g.fill();
+      }
+      // 이름표
+      g.font = "900 12px 'Malgun Gothic', sans-serif"; g.textAlign = 'center'; g.textBaseline = 'middle';
+      const label = `${f.name} · ${f.side === 'player' ? '내 전장' : '적 전장'}${f.ghost ? ' (계획)' : f.active ? ` · −${f.dmg}` : ' · 다음 턴부터'}`;
+      g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(label, x1 + w / 2, cy + h / 2 + 10);
+      g.fillStyle = f.active ? '#F2D29B' : 'rgba(242,210,155,0.75)'; g.fillText(label, x1 + w / 2, cy + h / 2 + 10);
+      g.restore();
+    }
   },
 
   // ── 저격 조준경 ───────────────────────────

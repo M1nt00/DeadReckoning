@@ -127,11 +127,24 @@ function startTurn(B) {
 function newBattle(enemyKey, playerCfg) {
   const B = {
     turn: 0, distance: R().startDistance, phase: 'plan', log: [], torpedoes: [], winner: null, events: [],
+    // 위치 (km): 나는 xP에서 오른쪽(적 쪽)이 전진, 적은 xE에서 왼쪽이 전진. 거리 = xE − xP (서로 지나칠 수 없음)
+    xP: 0, xE: R().startDistance,
+    fields: [],          // 깔린 전장 { owner, side, id, name, lo, hi, dmg, born } — 1인당 하나, born 다음 턴부터 적용
     player: makeShip('player', 'player', playerCfg), enemy: makeShip(enemyKey, 'enemy'),
   };
   startTurn(B);
   return B;
 }
+
+// 전장 구역: 깐 배에서 적 쪽으로 at×100km 떨어진 곳부터 폭 width×100km (깔린 뒤엔 그 자리에 고정)
+function fieldZone(B, s, it) {
+  const c = DATA.cards[it.id], st = R().step;
+  const x0 = s === B.player ? B.xP : B.xE, dir = s === B.player ? 1 : -1;
+  const a = x0 + dir * (it.at || 0) * st, b = a + dir * c.zone.width * st;
+  return { lo: Math.min(a, b), hi: Math.max(a, b) };
+}
+// 이 위치를 덮는 전장 (적용 중인 것만)
+function fieldsAt(B, x) { return B.fields.filter((f) => f.born < B.turn && x >= f.lo && x <= f.hi); }
 
 // 지원 카드: 계획 중에 바로 사용 (연료 · 열 즉시). 상대에게 보이지 않음. 성공하면 true
 function useSupport(B, s, handIdx) {
@@ -181,7 +194,7 @@ function efficiency(card, d) {
 }
 
 // ── 처리: 단계별 공개 · 처리 (화면이 한 단계씩 공개하고 보여줌) ──
-// 순서: 특수능력 → 시스템 → 선제 → 기동 → 방어 → 공격 → 열   (기획서 v0.8 15번. 특수능력 = 지금은 오버드라이브 · 전장은 아직 없음)
+// 순서: 특수능력 → 전장 → 시스템 → 선제 → 기동 → 방어 → 공격 → 열   (기획서 v0.8 15번. 특수능력 = 지금은 오버드라이브)
 // 각 단계: reveal(s) = 그 단계에 공개할 계획 항목 (양쪽 다 없으면 공개 생략), run() = 처리
 const isPre = (c) => !!c.preempt && (c.type === 'weapon' || c.type === 'defense');   // 선제: 무기 · 방어에만
 
@@ -213,11 +226,10 @@ function resolveSteps(B) {
     const mult = s.heat >= R().warnHeat ? R().warnShieldMult : 1;
     const add = Math.round((cards.reduce((t, c) => t + (c.shield || 0), 0) + (withRegen ? s.regen || 0 : 0)) * mult);
     s.shield += add;
-    // 회피 기동: 이번 턴 상대가 나와 다른 방향으로 움직였으면 (지도 기준 방향. 정지도 하나의 방향)
-    const dir = (x) => Math.sign(x.lastMove) * (x === P ? 1 : -1);
-    const dodge = cards.some((c) => c.evade) && dir(s) !== dir(other(s));
-    for (const c of cards) if (c.evade) B.log.push({ t: 'def', text: `${who(s)} ${c.name} ${dodge ? '성공' : '실패 — 같은 방향'}` });
-    const red = Math.max(0, ...cards.map((c) => Math.max(c.dmgReduce || 0, c.evade && dodge ? c.evade : 0)));
+    // 회피 기동: 이번 턴 내가 움직였으면
+    const moved = s.lastMove !== 0;
+    for (const c of cards) if (c.evadeIfMoved) B.log.push({ t: 'def', text: `${who(s)} ${c.name} ${moved ? '성공' : '실패 — 움직이지 않음'}` });
+    const red = Math.max(0, ...cards.map((c) => Math.max(c.dmgReduce || 0, c.evadeIfMoved && moved ? c.evadeIfMoved : 0)));
     if (red > s.dmgReduce) {
       s.dmgReduce = red;
       ev({ kind: 'evade', who: side(s), pct: Math.round(red * 100) });
@@ -282,6 +294,16 @@ function resolveSteps(B) {
         B.log.push({ t: 'heat', text: `${who(s)} 오버드라이브 가동 — 이번 턴 무기 피해 +${Math.round(R().overdriveBonus * 100)}%` });
       }
     } },
+    // 전장 — 구역을 만듦 (다음 턴부터 적용). 1인당 하나: 새로 깔면 내 이전 전장은 사라짐
+    { name: '전장', reveal: reveal((c) => c.type === 'field'), run() {
+      for (const s of ships) for (const it of itemsOf(s, (c) => c.type === 'field')) {
+        const c = DATA.cards[it.id], z = fieldZone(B, s, it);
+        B.fields = B.fields.filter((f) => f.owner !== s);
+        B.fields.push({ owner: s, side: side(s), id: it.id, name: c.name, lo: z.lo, hi: z.hi, dmg: c.zone.dmg, born: B.turn });
+        ev({ kind: 'field', who: side(s), name: c.name, lo: z.lo, hi: z.hi });
+        B.log.push({ t: 'info', text: `${who(s)} ${c.name} 전개 — ${who(s)} 배에서 ${(it.at || 0) * 100}~${((it.at || 0) + c.zone.width) * 100}km · 다음 턴부터` });
+      }
+    } },
     // ① 시스템 — 가장 먼저 처리되어 이번 턴의 규칙을 바꿈
     { name: '시스템', reveal: reveal((c) => c.type === 'system'), run() {
       for (const s of ships) for (const c of cardsOf(s, (c) => c.type === 'system')) {
@@ -305,14 +327,25 @@ function resolveSteps(B) {
     } },
     // ③ 기동
     { name: '기동', reveal: reveal((c) => c.type === 'move'), engine: (s) => plans.get(s).engine || 0, run() {
-      const pm = sums.get(P).move, em = sums.get(E).move;
-      const before = B.distance;
-      B.distance = clamp(B.distance - (pm + em) * R().step, 0, R().maxDistance);
+      const pm = sums.get(P).move, em = sums.get(E).move, st = R().step;
+      const before = B.distance, xP0 = B.xP, xE0 = B.xE;
+      let nP = B.xP + pm * st, nE = B.xE - em * st;
+      if (nE < nP) { const m = Math.round((nP + nE) / 2 / st) * st; nP = nE = m; }            // 서로 지나칠 수 없음: 만난 자리에서 멈춤
+      if (nE - nP > R().maxDistance) {                                                    // 최대 거리
+        const c = Math.round((nP + nE) / 2 / st) * st;
+        nP = c - R().maxDistance / 2; nE = c + R().maxDistance / 2;
+      }
+      B.xP = nP; B.xE = nE; B.distance = nE - nP;
       P.lastMove = pm; E.lastMove = em;
       for (const [s, m] of [[P, pm], [E, em]]) { s.moveHist.push(m); if (s.moveHist.length > 4) s.moveHist.shift(); }
-      ev({ kind: 'move', pm, em, before, after: B.distance });
+      ev({ kind: 'move', pm, em, before, after: B.distance, xP0, xE0, xP: B.xP, xE: B.xE });
       const desc = (m) => (m > 0 ? `${m * 100}km 전진` : m < 0 ? `${-m * 100}km 후진` : '정지');
       B.log.push({ t: 'move', text: `기동: 나 ${desc(pm)} · 적 ${desc(em)} → ${before}km → ${B.distance}km` });
+      // 전장: 기동을 마친 위치가 구역 안이면 피해 (지나가기만 하면 영향 없음 · 적용 중인 구역만)
+      for (const s of ships) for (const f of fieldsAt(B, s === P ? B.xP : B.xE)) {
+        ev(Object.assign({ kind: 'fieldHit', who: side(s), name: f.name, dmg: f.dmg }, hit(B, s, f.dmg, `${f.name} (${f.side === 'player' ? '내' : '적'} 전장)`)));
+      }
+      over();
     } },
     // ④ 방어
     { name: '방어', reveal: reveal((c) => c.type === 'defense' && !isPre(c)), run() {

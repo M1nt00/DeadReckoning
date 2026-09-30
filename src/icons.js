@@ -21,6 +21,7 @@ const ICON_PATHS = {
   coolCatalyst: '<path d="M24 5v38M8 14l32 20M8 34l32-20"/><path d="M19 8l5 5 5-5M19 40l5-5 5 5"/>',
   ventPurge: '<path d="M10 12h28v10H10z"/><path d="M14 28c0 6 4 6 4 12M24 28c0 6 4 6 4 12M34 28c0 6 4 6 4 12"/><path d="M16 17h16"/>',
   // 2026-10-01 새 카드
+  asteroids: '<path d="M10 14l6-4 6 3 1 6-5 4-7-2z"/><path d="M28 26l5-3 6 2 2 6-4 5-7-1-2-5z"/><circle cx="36" cy="11" r="3"/><circle cx="14" cy="34" r="2.5"/><circle cx="23" cy="40" r="1.6" fill="currentColor"/>',
   particleCutter: '<path d="M6 24h12"/><path d="M18 18l24 6-24 6z"/><path d="M26 12l4 4M26 36l4-4M36 14l2 4M36 34l2-4" stroke-dasharray="2 2"/>',
   phaseLaser: '<path d="M5 24h8M17 24h8M29 24h14" stroke-width="4"/><path d="M13 18v12M25 16v16" /><path d="M39 17l6 7-6 7"/>',
   orbitShot: '<ellipse cx="24" cy="24" rx="19" ry="9" stroke-dasharray="3 3"/><circle cx="24" cy="24" r="4"/><circle cx="41" cy="21" r="3" fill="currentColor"/><path d="M8 34l6-6"/>',

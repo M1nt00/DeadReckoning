@@ -11,6 +11,7 @@
 //  selfStatus: { 상태: 세기 } = 쓰면 나에게 상태
 //  trackMove: { min, dmg } = 상대가 이번 턴 min×100km 이상 움직였으면 피해가 dmg
 //  evadedBy: n     = 상대가 이번 턴 n×100km 이상 움직였으면 빗나감
+//  evadeIfMoved: r = 이번 턴 내가 움직였으면 받는 피해 −r
 // ─────────────────────────────────────────────
 window.DATA = window.DATA || {};
 
@@ -122,9 +123,9 @@ DATA.cards = {
   },
   evasive: {
     name: '회피 기동', type: 'defense', cost: 0, heat: 15,
-    evade: 0.5,                 // 이번 턴 상대가 나와 다른 방향으로 움직였으면 받는 피해 −50%
-    text: '이번 턴에 상대가 나와 다른 방향으로 이동했을 경우 받는 모든 피해가 50% 감소합니다.',
-    desc: '상대가 나와 다른 방향으로 움직였으면 이번 턴 받는 피해 −50%',
+    evadeIfMoved: 0.3,          // 이번 턴 내가 움직였으면 받는 피해 −30%
+    text: '이번 턴에 내가 이동했을 경우 받는 모든 피해가 30% 감소합니다.',
+    desc: '이번 턴 내가 움직였으면 받는 피해 −30%',
   },
 
   // ── 기동 ── (move: 100km 단위. +는 전진, −는 후진)
@@ -168,6 +169,16 @@ DATA.cards = {
     desc: '내 버프 +1턴 · 상대 디버프 +1턴',
   },
 
+  // ── 전장 (싸우는 장소를 바꿈 · 1인당 하나 · 양쪽 모두에게) ──
+  //   zone: { width: 구역 폭 (100km 단위), dmg: 구역 안에서 기동을 마친 함선이 받는 피해 }
+  //   놓을 때 구역 위치(내 배에서 몇 km)를 정함. 구역을 만든 다음 턴부터 적용. 지나가기만 하면 영향 없음
+  asteroids: {
+    name: '소행성 지대', type: 'field', cost: 3, heat: 15,
+    zone: { width: 3, dmg: 18 },
+    text: '지정한 범위 300km에 소행성 지대를 형성합니다. 구역에 진입한 함선은 턴마다 피해를 18 받습니다.',
+    desc: '폭 300km 구역. 다음 턴부터, 구역 안에서 기동을 마친 함선은 턴마다 피해 18',
+  },
+
   // ── 지원 (계획 중에 바로 사용 · 상대에게 보이지 않음) ──
   draw: {
     name: '드로우', type: 'support', cost: 1, heat: 0,
@@ -177,8 +188,8 @@ DATA.cards = {
   },
 };
 
-// 시작 덱 (14장)
+// 시작 덱 (15장) — 소행성 지대 1장은 전장 시험용 (2026-10-01)
 DATA.starterDeck = [
   'laser', 'laser', 'laser', 'railgun', 'railgun', 'torpedo', 'torpedo', 'scatter',
-  'shield', 'shield', 'shield', 'pointDefense', 'burn', 'retro',
+  'shield', 'shield', 'shield', 'pointDefense', 'burn', 'retro', 'asteroids',
 ];

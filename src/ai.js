@@ -58,10 +58,16 @@ function aiPlan(B) {
   for (let e = -backMax; e <= fwdMax; e++) engOpts.push(e);
   const odOpts = E.odCooldown === 0 ? [false, true] : [false];
 
+  // 전장: 플레이어가 있을 법한 곳에 구역을 깐다 (적 배 기준 거리)
+  const fieldAt = (id) => {
+    const w = DATA.cards[id].zone.width, dP = B.distance - predMove * R.step;
+    return clamp(Math.round(dP / R.step - w / 2), 0, R.maxDistance / R.step);
+  };
+  const myField = B.fields.some((f) => f.owner === E);
   let best = null, bestScore = -Infinity;
   const n = cardsNoMove.length;
   for (let mask = 0; mask < 1 << n; mask++) {
-    const picks = cardsNoMove.filter((_, k) => mask & (1 << k)).map((h) => ({ hand: h.i, id: h.id, steps: 0 }));
+    const picks = cardsNoMove.filter((_, k) => mask & (1 << k)).map((h) => ({ hand: h.i, id: h.id, steps: 0, at: DATA.cards[h.id].zone ? fieldAt(h.id) : undefined }));
     for (const mv of moveOpts) for (const engine of engOpts) for (const od of odOpts) {
       const items = sysItems.concat(mv ? picks.concat([mv]) : picks);
       const plan = { items, cool: 0, engine, od };
@@ -78,7 +84,8 @@ function aiPlan(B) {
           : weaponDmg(c, isPre(c) ? B.distance : d, od, isPre(c) ? 0 : predMove);   // 선제: 기동 전 거리 · 추적 무기: 예상 이동
         if (c.charge) wdmg += c.charge.dmg * 0.45;                       // 초고열 응집: 늦게 오는 큰 한 방
         if (c.inflict && weaponDmg(c, d, od)) score += 5 * Object.values(c.inflict).reduce((a, b) => a + b, 0);   // 상태이상
-        if (c.evade) score += expectedIncoming * c.evade * 0.4;           // 회피 기동 (반쯤 성공한다고 봄)
+        if (c.evadeIfMoved && s2.move) score += expectedIncoming * c.evadeIfMoved * 0.8;   // 회피 기동: 움직이면 성공
+        if (c.zone) score += myField ? 4 : 12;                             // 전장: 앞으로 여러 턴 피해
         if (c.shield) score += Math.min(c.shield, expectedIncoming) * 0.8;
         if (c.shieldNext) score += c.shieldNext * 0.4;                    // 재생 보호막
         if (c.dmgReduce) score += expectedIncoming * c.dmgReduce * 0.8;   // 물러나기
@@ -89,6 +96,9 @@ function aiPlan(B) {
       if (od) score -= 10;
       // 선호 거리 쪽으로
       score -= Math.abs(d - E.prefer) / 90;
+      // 적용 중인 전장 구역 안에서 기동을 마치면 피해
+      const xAfter = E.side === 'enemy' ? B.xE - s2.move * R.step : B.xP + s2.move * R.step;
+      for (const f of fieldsAt(B, xAfter)) score -= f.dmg;
       // 열 위험
       if (s2.heatAfter >= R.meltdownHeat) score -= 40;
       else if (s2.heatAfter >= R.dangerHeat) score -= 10;

@@ -8,7 +8,8 @@ let stepName = null;     // 지금 처리 중인 단계
 const $ = (id) => document.getElementById(id);
 const pct = (d) => (d / DATA.rules.maxDistance) * 100;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const TYPE_NAME = { weapon: '무기', defense: '방어', move: '기동', system: '시스템', support: '지원' };
+const TYPE_NAME = { weapon: '무기', defense: '방어', move: '기동', system: '시스템', support: '지원', field: '전장' };
+const zoneTxt = (it) => { const w = DATA.cards[it.id].zone.width, a = it.at || 0; return `${(a * 100).toLocaleString()}~${fmtM((a + w) * 100)}`; };
 let skipDeal = false;   // 손패를 다시 그려도 '한 장씩 올라오기'는 생략 (시스템 카드 사용 직후)
 
 function bandOf(d) {
@@ -88,6 +89,7 @@ function statChips(s) {
   if (s.skip) chip('debuff', '☢', '', `멜트다운 — 이번 턴은 기본 엔진(이동)만. 턴이 끝나면 열 ${R.meltdownResetHeat}`);
   if (s.overheated) chip('debuff', '⚠', '', `과열 위험 — 이번 턴 최대 연료 −${R.dangerFuel}`);
   if (s.locked >= 0) chip('debuff', '⛓', '', '교란 — 이번 턴 손패 1장 잠김');
+  for (const f of fieldsAt(B, s === B.player ? B.xP : B.xE)) chip('debuff', '☄', '', `${f.name} 구역 안 — 기동을 마쳤을 때 구역 안이면 피해 ${f.dmg}. 빠져나가려면 움직여라`);
   for (const [k, def] of Object.entries(DATA.status)) {
     const n = statusOf(s, k);
     if (n > 0) chip(def.kind, def.icon, n, `${def.kind === 'buff' ? '버프' : '디버프'} ${def.name} ${n} — ${def.desc}. 턴마다 1씩 줄어듦`);
@@ -160,7 +162,7 @@ function renderHud() {
   const planning = B.phase === 'plan' && !resolving;
   statUpdate('player', planning ? planSummary(P, P.plan).heatAfter : undefined);
   statUpdate('enemy');
-  $('steps').innerHTML = ['특수능력', '시스템', '선제', '기동', '방어', '공격', '열'].map((n, i) => `<span class="${stepName === n ? 'on' : ''}">${'①②③④⑤⑥⑦'[i]} ${n}</span>`).join('');
+  $('steps').innerHTML = ['특수능력', '전장', '시스템', '선제', '기동', '방어', '공격', '열'].map((n, i) => `<span class="${stepName === n ? 'on' : ''}">${'①②③④⑤⑥⑦⑧'[i]} ${n}</span>`).join('');
   $('distLbl').innerHTML = `거리 <b>${fmtM(B.distance)}</b> · ${bandOf(B.distance)} <small>(적 함선에 마우스 → 조준경)</small>`;
   $('torps').innerHTML = B.torpedoes.map((t) => `<span class="${t.owner === P ? 'me' : 'foe'}">${t.owner === P ? '▶ 내 어뢰' : '◀ 적 어뢰'} 비행 중</span>`).join(' · ');
 }
@@ -182,6 +184,10 @@ function renderRange() {
     };
     Scene.assign = { enemy: names((c) => c.type === 'weapon'), player: names((c) => c.type !== 'weapon') };
   } else Scene.assign = null;
+  // 전장: 깔린 구역 + 계획 중인 구역 (반투명)
+  Scene.fields = B.fields.map((f, i) => ({ lo: f.lo, hi: f.hi, name: f.name, side: f.side, dmg: f.dmg, active: f.born < B.turn, seed: i * 31 + (f.side === 'player' ? 0 : 17) }));
+  const fp = B.phase === 'plan' && !resolving && P.plan.items.find((it) => DATA.cards[it.id].zone);
+  Scene.fieldGhost = fp ? Object.assign({ name: DATA.cards[fp.id].name, side: 'player', dmg: DATA.cards[fp.id].zone.dmg, ghost: true, seed: 5 }, fieldZone(B, P, fp)) : null;
 }
 
 // 놓은 카드가 계획 줄로 날아 들어감
@@ -216,6 +222,10 @@ function chipHTML(it, editable, idx) {
   } else if (c.move || c.inertia) {
     const m = itemMove(it, B.player);
     body += ` ${m > 0 ? m * 100 + 'km 전진' : m < 0 ? -m * 100 + 'km 후진' : '이동 없음'}`;
+  } else if (c.zone) {
+    body += editable
+      ? ` <button data-act="at" data-i="${idx}" data-d="-1" title="내 쪽으로">◀</button> <span title="구역 위치: 내 배에서 적 쪽으로">내 배에서 ${zoneTxt(it)}</span> <button data-act="at" data-i="${idx}" data-d="1" title="적 쪽으로">▶</button>`
+      : ` 내 배에서 ${zoneTxt(it)}`;
   }
   body += ` <span style="color:var(--fuel)">${itemCost(it)}</span>`;
   if (editable) body += ` <button data-act="remove" data-i="${idx}">×</button>`;
@@ -341,7 +351,10 @@ function detailHTML(c) {
   if (c.extend) notes.push(`걸려 있는 내 버프와 상대 디버프의 남은 턴 +${c.extend}.`);
   if (c.trackMove) notes.push(`상대가 이번 턴 ${c.trackMove.min * 100}km 이상 움직였으면 피해 ${c.trackMove.dmg}.`);
   if (c.evadedBy) notes.push(`상대가 이번 턴 ${c.evadedBy * 100}km 이상 움직였으면 빗나감.`);
-  if (c.evade) notes.push(`상대가 이번 턴 나와 다른 방향으로 움직였으면 받는 모든 피해 −${Math.round(c.evade * 100)}% (정지도 하나의 방향으로 침).`);
+  if (c.evadeIfMoved) notes.push(`이번 턴 내가 움직였으면 (카드 · 기본 엔진 무엇이든) 받는 모든 피해 −${Math.round(c.evadeIfMoved * 100)}%.`);
+  if (c.zone) notes.push(`전장 — 내 함선에 놓고, 계획 줄의 ◀ ▶로 구역 위치를 정한다 (내 배에서 적 쪽으로). 깔린 뒤엔 그 자리에 고정.`,
+    `구역을 만든 <b>다음 턴부터</b> 적용. 구역 안에서 기동을 마친 함선은 매 턴 피해 ${c.zone.dmg} (나도 포함). 지나가기만 하면 영향 없음.`,
+    '1인당 하나 — 새로 깔면 내 이전 전장은 사라진다.');
   if (c.inertia) { const m = itemMove({ id: 'inertia' }, B.player); notes.push(`지금이라면: ${m > 0 ? m * 100 + 'km 전진' : m < 0 ? -m * 100 + 'km 후진' : '이동 없음 (지난 턴에 정지)'}`); }
   if (c.type === 'support') notes.push('지원 카드 — 내 함선에 놓는 즉시 사용 (연료도 즉시). 상대에게 공개되지 않는다.');
   if (c.selfDamage) notes.push(`명중하면 나도 피해 ${c.selfDamage}.`);
@@ -378,7 +391,7 @@ function showPile(kind) {
   closeDetail();
   const P = B.player, list = kind === 'draw' ? P.draw : P.discard, cnt = {};
   for (const id of list) cnt[id] = (cnt[id] || 0) + 1;
-  const order = ['weapon', 'defense', 'move', 'system', 'support'];
+  const order = ['weapon', 'defense', 'move', 'system', 'field', 'support'];
   const ids = Object.keys(cnt).sort((a, b) => order.indexOf(DATA.cards[a].type) - order.indexOf(DATA.cards[b].type) || DATA.cards[a].name.localeCompare(DATA.cards[b].name, 'ko'));
   $('overlay').innerHTML = `<div class="box pileBox"><h1>${kind === 'draw' ? '뽑을 더미' : '버린 더미'} <small>${list.length}장</small></h1>
     <p class="pnote">${kind === 'draw' ? '순서는 숨겨져 있다 — 무엇이 남았는지만 보인다.' : '뽑을 더미가 떨어지면 이 카드들을 섞어서 다시 뽑는다.'}</p>
@@ -423,7 +436,7 @@ function phaseCardHTML(x, i, big) {
   if (x.engine) return `<div class="rcard front" data-type="move" ${delay}><span class="ri">${iconSVG('engine', 46)}</span>기본 엔진<small>${mvTxt(x.engine)}</small></div>`;
   const it = x.it, c = DATA.cards[it.id];
   if (big) return `<div class="rcard front sys" ${delay}><span class="ri">${iconSVG(it.id, 52)}</span>${c.name}<small>${c.desc}</small></div>`;
-  const extra = c.variable ? mvTxt(it.steps) : c.move ? mvTxt(c.move) : (c.preempt ? '선제 ' : '') + TYPE_NAME[c.type];
+  const extra = c.variable ? mvTxt(it.steps) : c.move ? mvTxt(c.move) : c.zone ? `그 배에서 ${zoneTxt(it)}` : (c.preempt ? '선제 ' : '') + TYPE_NAME[c.type];
   return `<div class="rcard front" data-type="${c.type}" ${delay}><span class="ri">${iconSVG(it.id, 46)}</span>${c.name}<small>${extra}</small></div>`;
 }
 async function revealPhase(step, mine, theirs) {
@@ -476,7 +489,8 @@ function aimInfo(id, hand) {
   const c = DATA.cards[id], P = B.player;
   if (c.type === 'system') return { text: `${c.name} · 공개 때 가장 먼저 발동`, sub: c.desc, color: '#C08BFF' };
   if (c.type === 'support') return { text: `${c.name} · 지금 바로 사용 (상대에게 안 보임)`, sub: c.desc, color: '#FFD166' };
-  if (c.evade) return { text: `${c.name} · 상대가 다른 방향으로 움직이면 피해 −${Math.round(c.evade * 100)}%`, color: '#9DB8FF' };
+  if (c.evadeIfMoved) return { text: `${c.name} · 이번 턴 내가 움직이면 피해 −${Math.round(c.evadeIfMoved * 100)}%`, color: '#9DB8FF' };
+  if (c.zone) return { text: `${c.name} · 폭 ${c.zone.width * 100}km 구역 (놓은 뒤 위치 조절)`, sub: `다음 턴부터 · 구역 안에서 기동을 마친 함선 매 턴 −${c.zone.dmg} (양쪽 모두)`, color: '#E6B873' };
   if (c.inertia) { const m = itemMove({ id }, P); return { text: `${c.name} · ${m > 0 ? m * 100 + 'km 전진' : m < 0 ? -m * 100 + 'km 후진' : '지난 턴에 정지 — 이동 없음'}`, color: '#7CFF9B' }; }
   if (c.maxRange !== undefined && B.distance > c.maxRange) return { text: `${c.name} · ${c.maxRange}km 이내에서만 (지금 ${fmtM(B.distance)})`, color: '#FF5A5F' };
   if (c.dmgReduce) return { text: `${c.name} · 100km 후진 · 받는 피해 −${Math.round(c.dmgReduce * 100)}%`, color: '#9DB8FF' };
@@ -626,7 +640,8 @@ function togglePlan(i) {
   if (k >= 0) P.plan.items.splice(k, 1);
   else {
     const id = P.hand[i];
-    P.plan.items.push({ hand: i, id, steps: DATA.cards[id].variable ? 2 : 0 });
+    const zc = DATA.cards[id].zone;
+    P.plan.items.push({ hand: i, id, steps: DATA.cards[id].variable ? 2 : 0, at: zc ? Math.max(0, Math.round(B.distance / DATA.rules.step / 2 - zc.width / 2)) : undefined });
   }
   P.plan.cool = Math.min(P.plan.cool, planSummary(P, Object.assign({}, P.plan, { cool: 0 })).left);
   render();
@@ -722,7 +737,7 @@ function showHelp() {
     <h1>규칙</h1>
     <ul>
       <li><b>몰래 고르고 동시에 공개.</b> 손패에서 카드를 골라 계획을 세우고 [결정]. 적도 같은 순간 몰래 고른다.</li>
-      <li><b>단계별 공개 · 처리: ① 특수능력(오버드라이브) → ② 시스템 → ③ 선제 → ④ 기동 → ⑤ 방어 → ⑥ 공격 → ⑦ 열.</b> 카드는 계획 때 모두 정하고, 공개만 단계마다 한다 (공개 중엔 못 바꾼다). 기동이 공격보다 먼저라서, 공격은 <b>바뀐 거리</b>로 판정된다. 상대가 어디로 갈지 추측하라.</li>
+      <li><b>단계별 공개 · 처리: ① 특수능력(오버드라이브) → ② 전장 → ③ 시스템 → ④ 선제 → ⑤ 기동 → ⑥ 방어 → ⑦ 공격 → ⑧ 열.</b> 카드는 계획 때 모두 정하고, 공개만 단계마다 한다 (공개 중엔 못 바꾼다). 기동이 공격보다 먼저라서, 공격은 <b>바뀐 거리</b>로 판정된다. 상대가 어디로 갈지 추측하라.</li>
       <li><b>거리</b> 0 ~ 2,000km. 다음 거리 = 지금 − 내 전진 − 적 전진. 무기마다 강한 거리가 다르다. <b>적 함선에 마우스를 올리면 조준경</b>이 뜬다 (거리 · 거리 자).</li>
       <li><b>카드 사용:</b> 무기는 <b>끌어서 적 함선에 조준</b> — 저격 조준경 안의 거리 자에 강한 거리(초록)가, 옆에 예상 피해가 보인다. 방어 · 기동 카드는 <b>내 함선에 끌어다 놓기</b>. 넣은 카드는 클릭하면 뺀다.</li>
       <li>무기가 맞으면 <b>예측 판정</b>이 뜬다: 효율 90%↑ 예측 적중 · 60%↑ 유효 사격 · 그 아래는 빗나간 예측.</li>
@@ -735,6 +750,7 @@ function showHelp() {
       <li><b>열</b> 매 턴 냉각기가 −10. 50↑ 보호막 약화 · 80↑ 다음 턴 최대 연료 −1 · 100 멜트다운(선체 −30, 다음 턴은 기본 엔진으로 이동만 — 그 턴이 끝나면 열 40).</li>
       <li><b>버프 · 디버프</b>: 함선 아래 칸에 아이콘과 숫자로 보인다 (마우스 → 설명). 숫자 = 남은 턴. 걸릴 때마다 쌓이고, 턴마다 1씩 줄어든다. 상태이상은 보호막과 상관없이 걸린다. 교란 = 손패 1장 잠김 · 냉각 = 매 턴 열 −7.</li>
       <li><b>지원 카드 (노란색)</b>: 내 함선에 놓는 즉시 사용되고, 상대에게 공개되지 않는다.</li>
+      <li><b>전장 카드 (황토색)</b>: 우주의 한 구역에 깔린다 (위치는 계획 줄의 ◀ ▶). <b>다음 턴부터</b> 적용 — 구역 안에서 기동을 마친 함선은 (나도) 피해. 지나가기만 하면 영향 없음. 1인당 하나.</li>
       <li>공격은 <b>일제 사격</b> 단위: 도착 어뢰 → (내 1발째 + 적 1발째) → (내 2발째 + 적 2발째) … <b>한쪽이 0이 되는 순간 끝</b> — 남은 사격은 없다. 같은 일제 사격에서 <b>둘 다 격침</b>되면 무승부 (항해에선 패배).</li>
       <li>단축키: 1~5 카드 집기 (목표 클릭으로 확정, Esc 취소) · ←/→ 기본 엔진 (Shift = 500km) · O 오버드라이브 · Space 결정 · L 기록 · H 규칙</li>
     </ul>
@@ -748,6 +764,10 @@ document.addEventListener('click', (e) => {
   if (btn) {
     const P = B.player, i = +btn.dataset.i, d = +btn.dataset.d;
     if (btn.dataset.act === 'remove') P.plan.items.splice(i, 1);
+    if (btn.dataset.act === 'at') {                 // 전장 구역 위치 (내 배에서 적 쪽으로 100km 단위)
+      const it = P.plan.items[i];
+      it.at = Math.max(0, Math.min(DATA.rules.maxDistance / DATA.rules.step, (it.at || 0) + d));
+    }
     if (btn.dataset.act === 'steps') {
       const it = P.plan.items[i], c = DATA.cards[it.id];
       it.steps = Math.max(-c.maxSteps, Math.min(c.maxSteps, it.steps + d));

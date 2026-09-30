@@ -16,7 +16,7 @@ DATA.voyage = {
   cardPool: { laser: 3, railgun: 2, torpedo: 2, scatter: 2, ram: 1, shield: 2, heavyShield: 2, pointDefense: 1, burn: 1, retro: 1,
     regenShield: 2, fallback: 1, solarLance: 1, boarding: 1, coolCatalyst: 2, ventPurge: 1,
     // 2026-10-01 새 카드
-    particleCutter: 1, phaseLaser: 1, orbitShot: 2, guidedMissile: 2, evasive: 1, inertia: 1, timeDelay: 1, draw: 2 },
+    particleCutter: 1, phaseLaser: 1, orbitShot: 2, guidedMissile: 2, evasive: 1, inertia: 1, timeDelay: 1, draw: 2, asteroids: 1 },
 
   // 특별한 카드 풀 (사건 보상)
   pools: {
