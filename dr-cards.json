@@ -1,7 +1,7 @@
 {
   "app": "DEAD RECKONING 카드 목록",
   "version": 1,
-  "savedAt": "2026-09-30T18:57:55.082Z",
+  "savedAt": "2026-09-30T19:09:54.070Z",
   "cards": [
     {
       "id": "c1",
@@ -128,7 +128,7 @@
       "id": "c1790450965588",
       "name": "재생 보호막",
       "type": "defense",
-      "cost": 2,
+      "cost": 1,
       "heat": 5,
       "rangeLabel": "",
       "effect": "이번 턴 보호막 +8, 다음 턴 보호막 +6.",
