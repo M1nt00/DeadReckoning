@@ -97,6 +97,7 @@ function planSummary(s, plan) {
 // ── 턴 ───────────────────────────────────────
 function startTurn(B) {
   B.turn++;
+  B.fields = (B.fields || []).filter((f) => B.turn <= f.born + f.turns);   // 유지 턴이 끝난 전장은 사라짐
   for (const s of [B.player, B.enemy]) {
     s.discard.push(...s.hand);
     s.hand = [];
@@ -143,8 +144,16 @@ function fieldZone(B, s, it) {
   const a = x0 + dir * (it.at || 0) * st, b = a + dir * c.zone.width * st;
   return { lo: Math.min(a, b), hi: Math.max(a, b) };
 }
-// 이 위치를 덮는 전장 (적용 중인 것만)
-function fieldsAt(B, x) { return B.fields.filter((f) => f.born < B.turn && x >= f.lo && x <= f.hi); }
+// 이 위치를 덮는 전장 (적용 중인 것만). 경계에 걸쳐도 안으로 침
+const fieldActive = (B, f) => f.born < B.turn && B.turn <= f.born + f.turns;
+function fieldsAt(B, x) { return B.fields.filter((f) => fieldActive(B, f) && x >= f.lo && x <= f.hi); }
+// 구역 위치 글: 깐 배 기준 (+ = 적 쪽 앞, − = 뒤)
+function zoneLabel(it, ship = '내 배') {
+  const w = DATA.cards[it.id].zone.width, a = (it.at || 0) * 100, b = a + w * 100, km = (v) => v.toLocaleString() + 'km';
+  if (a >= 0) return `${ship}에서 ${a.toLocaleString()}~${km(b)}`;
+  if (b <= 0) return `${ship} 뒤쪽 ${Math.abs(b).toLocaleString()}~${km(Math.abs(a))}`;
+  return `${ship} 뒤 ${km(-a)} ~ 앞 ${km(b)}`;
+}
 
 // 지원 카드: 계획 중에 바로 사용 (연료 · 열 즉시). 상대에게 보이지 않음. 성공하면 true
 function useSupport(B, s, handIdx) {
@@ -299,9 +308,9 @@ function resolveSteps(B) {
       for (const s of ships) for (const it of itemsOf(s, (c) => c.type === 'field')) {
         const c = DATA.cards[it.id], z = fieldZone(B, s, it);
         B.fields = B.fields.filter((f) => f.owner !== s);
-        B.fields.push({ owner: s, side: side(s), id: it.id, name: c.name, lo: z.lo, hi: z.hi, dmg: c.zone.dmg, born: B.turn });
+        B.fields.push({ owner: s, side: side(s), id: it.id, name: c.name, lo: z.lo, hi: z.hi, dmg: c.zone.dmg, turns: c.zone.turns || 99, born: B.turn });
         ev({ kind: 'field', who: side(s), name: c.name, lo: z.lo, hi: z.hi });
-        B.log.push({ t: 'info', text: `${who(s)} ${c.name} 전개 — ${who(s)} 배에서 ${(it.at || 0) * 100}~${((it.at || 0) + c.zone.width) * 100}km · 다음 턴부터` });
+        B.log.push({ t: 'info', text: `${who(s)} ${c.name} 전개 — ${zoneLabel(it, s === P ? '내 배' : '적 배')} · 다음 턴부터 ${c.zone.turns || ''}턴` });
       }
     } },
     // ① 시스템 — 가장 먼저 처리되어 이번 턴의 규칙을 바꿈

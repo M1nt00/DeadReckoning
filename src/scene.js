@@ -584,7 +584,7 @@ const Scene = {
       }
       // 이름표
       g.font = "900 12px 'Malgun Gothic', sans-serif"; g.textAlign = 'center'; g.textBaseline = 'middle';
-      const label = `${f.name} · ${f.side === 'player' ? '내 전장' : '적 전장'}${f.ghost ? ' (계획)' : f.active ? ` · −${f.dmg}` : ' · 다음 턴부터'}`;
+      const label = `${f.name} · ${f.side === 'player' ? '내 전장' : '적 전장'}${f.ghost ? ' (계획)' : f.active ? ` · −${f.dmg} · 남은 ${f.left}턴` : ` · 다음 턴부터 ${f.turns}턴`}`;
       g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(label, x1 + w / 2, cy + h / 2 + 10);
       g.fillStyle = f.active ? '#F2D29B' : 'rgba(242,210,155,0.75)'; g.fillText(label, x1 + w / 2, cy + h / 2 + 10);
       g.restore();
