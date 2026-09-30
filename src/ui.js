@@ -309,8 +309,6 @@ function renderHand() {
       </div>
       <div class="cfoot"><span class="key">${i + 1}</span><button class="detailBtn" data-hand="${i}">자세히</button></div>
       ${locked ? '<div class="lockNote">교란으로 잠김</div>' : far ? `<div class="lockNote">${c.maxRange}km 이내에서만</div>` : ''}
-      ${c.type === 'system' ? '<div class="sysBadge">가장 먼저</div>' : ''}
-      ${c.type === 'support' ? '<div class="sysBadge supBadge">즉시 · 비공개</div>' : ''}
       ${c.preempt ? '<div class="preBadge">선제</div>' : ''}
     </div>`;
   }).join('');
@@ -379,7 +377,7 @@ function codexCardHTML(id) {
     <div class="ctop"><span class="cost">${c.cost}</span><span class="ctype">${TYPE_NAME[c.type]}</span><span class="cheat">🔥${c.heat}</span></div>
     <div class="cart">${iconSVG(id, 40)}</div>
     <div class="cbody"><div class="cname">${c.name}</div><div class="ctext ${(c.text || c.desc).length > 62 ? 'long' : ''}">${c.text || c.desc}</div></div>
-    ${c.type === 'system' ? '<div class="sysBadge">가장 먼저</div>' : ''}${c.type === 'support' ? '<div class="sysBadge supBadge">즉시 · 비공개</div>' : ''}${c.preempt ? '<div class="preBadge">선제</div>' : ''}
+    ${c.preempt ? '<div class="preBadge">선제</div>' : ''}
   </div>`;
 }
 function renderCodex() {
