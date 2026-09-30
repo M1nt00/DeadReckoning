@@ -592,3 +592,6 @@ body.onVoyage #top, body.onVoyage #field, body.onVoyage #tray, body.onVoyage #lo
 
 #reveal .rcard { width: 180px; }
 #reveal { transform-origin: 50% 0; }   /* 가운데(배율 1)에선 영향 없음 · 물러날 때 위쪽 기준으로 줄어듦 */
+
+/* '없음'은 뒤집지 않고 그대로 */
+#reveal .rcard.none { animation: none !important; }
