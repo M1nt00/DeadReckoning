@@ -567,3 +567,28 @@ body.onVoyage #top, body.onVoyage #field, body.onVoyage #tray, body.onVoyage #lo
 .card .preBadge { position: absolute; left: 50%; top: 40px; transform: translateX(-50%); z-index: 2; font-size: 11px; font-weight: 900; letter-spacing: 2px; color: #1A1204; background: #FFD166; padding: 1px 10px; border-radius: 3px; box-shadow: 0 0 10px rgba(255,209,102,0.7); }
 .card .sysBadge { top: 40px; }
 .rcard[data-type=system] { border-color: rgba(192,139,255,0.75); } .rcard[data-type=system] .ri { color: var(--system); }
+
+/* 연료 칸: 오버드라이브로 늘어난 칸 */
+.fuelPips i.odSlot { border-color: var(--heat); box-shadow: inset 0 0 0 1px rgba(255,122,58,0.6); }
+.fuelPips i.odSlot.used { background: linear-gradient(180deg, #FFB547, var(--heat)); box-shadow: 0 0 6px rgba(255,122,58,0.6); }
+
+/* 단계별 공개 카드 크게 (물러날 때는 작게) */
+#reveal { width: min(98%, 1320px); gap: 20px; }
+#reveal .rcard { width: 190px; height: 104px; padding: 14px 12px 12px 72px; font-size: 18px; border-radius: 9px; }
+#reveal .rcard .ri { left: 14px; }
+#reveal .rcard small { font-size: 13px; margin-top: 6px; }
+#reveal .rcard.none { width: 150px; padding: 0; display: grid; place-items: center; color: var(--dim); font-size: 15px; font-weight: 400; background: rgba(10,15,28,0.6); }
+#reveal .revealMid { font-size: 17px; padding: 10px 0; }
+#reveal.sysPhase .rcard { width: 260px; height: 130px; padding: 16px 16px 14px 88px; font-size: 22px; }
+#reveal.sysPhase .rcard.none { width: 200px; }
+#reveal.docked { transform: translate(-50%, 0) scale(0.5); }
+
+/* 물러난 공개 줄: 한 줄로 작게 (선체 막대를 가리지 않게) */
+#reveal.docked { top: 34px; transform: translate(-50%, 0) scale(0.42); }
+#reveal.docked .revealSide { flex-wrap: nowrap; }
+
+/* 가운데 공개: 화면 폭 안에 (한쪽에 카드 3장이 한 줄로) */
+#reveal { width: min(96%, 1240px); transform: translate(-50%, -50%) scale(1); }
+
+#reveal .rcard { width: 180px; }
+#reveal { transform-origin: 50% 0; }   /* 가운데(배율 1)에선 영향 없음 · 물러날 때 위쪽 기준으로 줄어듦 */

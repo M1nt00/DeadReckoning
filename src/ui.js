@@ -250,10 +250,11 @@ function renderPlan() {
   const P = B.player, plan = P.plan, sum = planSummary(P, plan);
   const canPlan = B.phase === 'plan' && !resolving;
   const editable = canPlan && !P.skip;          // 멜트다운 턴: 카드 · 냉각 · 오버드라이브 불가
+  // 연료 칸: 원래 연료 + 오버드라이브로 늘어난 칸(주황 테두리). 넘치면 빨강
   let pips = '';
-  const total = Math.max(P.fuel, sum.cost + sum.cool);
+  const total = Math.max(sum.cap, sum.cost + sum.cool);
   for (let i = 0; i < total; i++) {
-    const cls = i < Math.min(sum.cost, P.fuel) ? 'used' : i >= P.fuel ? 'over' : i < sum.cost + sum.cool ? 'cool' : '';
+    const cls = [i < sum.cost ? 'used' : i < sum.cost + sum.cool ? 'cool' : '', i >= P.fuel && i < sum.cap ? 'odSlot' : '', i >= sum.cap ? 'over' : ''].join(' ');
     pips += `<i class="${cls}"></i>`;
   }
   const carry = Math.min(DATA.rules.carryMax, sum.left - sum.cool);
@@ -272,7 +273,7 @@ function renderPlan() {
   let items = plan.items.map((it, i) => chipHTML(it, editable, i)).join('');
   if (P.skip) items = engineHTML + '<span class="empty">멜트다운 — 이번 턴은 기본 엔진(이동)만. 턴이 끝나면 열 40</span>';
   else items = engineHTML + (items || '<span class="empty">카드를 함선에 끌어 놓기 (1~5)</span>');
-  const fuelLeft = Math.max(0, P.fuel - sum.cost - sum.cool);
+  const fuelLeft = Math.max(0, sum.cap - sum.cost - sum.cool);
   $('planBar').innerHTML = `
     <span class="label">내 계획</span>
     <div class="planRow">${items}${exTxt}</div>
@@ -286,7 +287,7 @@ function renderPlan() {
     <div class="coolBox" title="남는 연료 1당 열 −${R.coolPerFuel}">
       <span class="fbl">냉각</span>
       <button data-act="cool" data-d="-1" ${editable ? '' : 'disabled'}>−</button><b>${plan.cool}</b><button data-act="cool" data-d="1" ${editable ? '' : 'disabled'}>+</button>
-      ${plan.cool ? `<small>열 −${plan.cool * R.coolPerFuel}</small>` : ''}
+      <small title="자연 냉각 ${P.cooling} + 연료 냉각 ${plan.cool} × ${R.coolPerFuel}">열 −${P.skip ? 0 : P.cooling + plan.cool * R.coolPerFuel}</small>
     </div>
     ${P.skip ? '' : odHTML}
     <button id="decide" ${B.phase === 'plan' && !resolving && sum.ok ? '' : 'disabled'} title="결정 → 동시 공개">결정 (Space)</button>
@@ -435,12 +436,12 @@ function phaseItems(step, s) {
 const mvTxt = (m) => (m > 0 ? `${m * 100}km 전진` : `${-m * 100}km 후진`);
 function phaseCardHTML(x, i, big) {
   const delay = `style="animation-delay:${i * 0.06}s"`;
-  if (x.od) return `<div class="rcard front od" ${delay}><span class="ri">${iconSVG('overdrive', 32)}</span>오버드라이브<small>무기 +50%</small></div>`;
-  if (x.engine) return `<div class="rcard front" data-type="move" ${delay}><span class="ri">${iconSVG('engine', 32)}</span>기본 엔진<small>${mvTxt(x.engine)}</small></div>`;
+  if (x.od) return `<div class="rcard front od" ${delay}><span class="ri">${iconSVG('overdrive', 46)}</span>오버드라이브<small>무기 +50%</small></div>`;
+  if (x.engine) return `<div class="rcard front" data-type="move" ${delay}><span class="ri">${iconSVG('engine', 46)}</span>기본 엔진<small>${mvTxt(x.engine)}</small></div>`;
   const it = x.it, c = DATA.cards[it.id];
-  if (big) return `<div class="rcard front sys" ${delay}><span class="ri">${iconSVG(it.id, 44)}</span>${c.name}<small>${c.desc}</small></div>`;
+  if (big) return `<div class="rcard front sys" ${delay}><span class="ri">${iconSVG(it.id, 52)}</span>${c.name}<small>${c.desc}</small></div>`;
   const extra = c.variable ? mvTxt(it.steps) : c.move ? mvTxt(c.move) : (c.preempt ? '선제 ' : '') + TYPE_NAME[c.type];
-  return `<div class="rcard front" data-type="${c.type}" ${delay}><span class="ri">${iconSVG(it.id, 32)}</span>${c.name}<small>${extra}</small></div>`;
+  return `<div class="rcard front" data-type="${c.type}" ${delay}><span class="ri">${iconSVG(it.id, 46)}</span>${c.name}<small>${extra}</small></div>`;
 }
 async function revealPhase(step, mine, theirs) {
   const el = $('reveal');
