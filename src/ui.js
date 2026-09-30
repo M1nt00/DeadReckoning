@@ -89,7 +89,7 @@ function statChips(s) {
   if (s.skip) chip('debuff', '☢', '', `멜트다운 — 이번 턴은 기본 엔진(이동)만. 턴이 끝나면 열 ${R.meltdownResetHeat}`);
   if (s.overheated) chip('debuff', '⚠', '', `과열 위험 — 이번 턴 최대 연료 −${R.dangerFuel}`);
   if (s.locked >= 0) chip('debuff', '⛓', '', '교란 — 이번 턴 손패 1장 잠김');
-  for (const f of fieldsAt(B, s === B.player ? B.xP : B.xE)) chip('debuff', '☄', '', `${f.name} 구역 안 — 기동을 마쳤을 때 구역 안이면 피해 ${f.dmg}. 빠져나가려면 움직여라`);
+  for (const f of fieldsOn(B, s.side, s === B.player ? B.xP : B.xE)) chip('debuff', '☄', '', `${f.name}에 걸쳐 있음 — 기동을 마쳤을 때 몸체가 조금이라도 구역에 걸치면 피해 ${f.dmg}. 빠져나가려면 움직여라`);
   for (const [k, def] of Object.entries(DATA.status)) {
     const n = statusOf(s, k);
     if (n > 0) chip(def.kind, def.icon, n, `${def.kind === 'buff' ? '버프' : '디버프'} ${def.name} ${n} — ${def.desc}. 턴마다 1씩 줄어듦`);
@@ -354,7 +354,7 @@ function detailHTML(c) {
   if (c.evadedBy) notes.push(`상대가 이번 턴 ${c.evadedBy * 100}km 이상 움직였으면 빗나감.`);
   if (c.evadeIfMoved) notes.push(`이번 턴 내가 움직였으면 (카드 · 기본 엔진 무엇이든) 받는 모든 피해 −${Math.round(c.evadeIfMoved * 100)}%.`);
   if (c.zone) notes.push(`전장 — 내 함선에 놓고, 계획 줄의 ◀ ▶로 구역 위치를 정한다 (내 배 앞 · 뒤 어디든). 깔린 뒤엔 그 자리에 고정.`,
-    `구역을 만든 <b>다음 턴부터 ${c.zone.turns}턴</b> 동안 적용. 구역 안에서 기동을 마친 함선은 매 턴 피해 ${c.zone.dmg} (나도 포함, 경계에 걸쳐도). 지나가기만 하면 영향 없음.`,
+    `구역을 만든 <b>다음 턴부터 ${c.zone.turns}턴</b> 동안 적용. 기동을 마쳤을 때 몸체(길이 ${DATA.rules.shipLength}km)가 조금이라도 구역에 걸친 함선은 매 턴 피해 ${c.zone.dmg} (나도 포함). 지나가기만 하면 영향 없음.`,
     '1인당 하나 — 새로 깔면 내 이전 전장은 사라진다.');
   if (c.inertia) { const m = itemMove({ id: 'inertia' }, B.player); notes.push(`지금이라면: ${m > 0 ? m * 100 + 'km 전진' : m < 0 ? -m * 100 + 'km 후진' : '이동 없음 (지난 턴에 정지)'}`); }
   if (c.type === 'support') notes.push('지원 카드 — 내 함선에 놓는 즉시 사용 (연료도 즉시). 상대에게 공개되지 않는다.');

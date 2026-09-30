@@ -126,12 +126,14 @@ const Scene = {
     const y = F.y + F.h * 0.56 + (side === 'player' ? 8 : -8) + Math.sin(this.time * 0.9 + (side === 'player' ? 0 : 2)) * 3;   // 조금 아래: 위쪽 계기판 · 선체 막대 자리
     return { x, y };
   },
-  // 우주 위치(km) → 화면 x: 두 함선 사이는 비율로, 바깥은 같은 배율로
+  // 우주 위치(km) → 화면 x. 함선의 위치 = 뱃머리 (거리 0km = 뱃머리끼리 맞닿음)
+  //   두 뱃머리 사이는 비율로 · 뱃머리 뒤 shipLength km = 함선 그림 몸체 · 그 뒤는 같은 배율
+  tail(side) { const p = this.pos(side), k = this.design(side).scale || 1; return p.x + (side === 'player' ? -80 : 78) * k; },
   worldX(x) {
-    const P = this.pos('player').x, E = this.pos('enemy').x, xp = this.xP, xe = this.xE;
+    const P = this.nose('player').x, E = this.nose('enemy').x, xp = this.xP, xe = this.xE, L = DATA.rules.shipLength;
     const k = (this.sep(DATA.rules.maxDistance) - this.sep(0)) / DATA.rules.maxDistance;   // 1km = 몇 픽셀
-    if (x <= xp) return P - (xp - x) * k;
-    if (x >= xe) return E + (x - xe) * k;
+    if (x <= xp) { const b = xp - x, T = this.tail('player'); return b <= L ? P - (b / L) * (P - T) : T - (b - L) * k; }
+    if (x >= xe) { const b = x - xe, T = this.tail('enemy'); return b <= L ? E + (b / L) * (T - E) : T + (b - L) * k; }
     return P + ((x - xp) / Math.max(1, xe - xp)) * (E - P);
   },
   design(side) { return Art.design[this.skin[side]] || Art.design.vex; },
@@ -559,7 +561,7 @@ const Scene = {
     const cy = (this.pos('player').y + this.pos('enemy').y) / 2, h = 170;
     const rnd = (i) => { const v = Math.sin(i * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
     for (const f of list) {
-      const x1 = this.worldX(f.lo - 50), x2 = this.worldX(f.hi + 50), w = x2 - x1;
+      const x1 = this.worldX(f.lo), x2 = this.worldX(f.hi), w = x2 - x1;
       const col = f.side === 'player' ? '92,225,230' : '255,90,95';
       g.save();
       g.globalAlpha = f.ghost ? 0.55 : f.active ? 1 : 0.7;
@@ -581,6 +583,14 @@ const Scene = {
         g.beginPath();
         for (let a = 0; a < 7; a++) { const ang = (a / 7) * 6.283, rr = r * (0.7 + rnd(seed * 7 + a) * 0.5); g.lineTo(x + Math.cos(ang) * rr, y + Math.sin(ang) * rr); }
         g.closePath(); g.fill();
+      }
+      // 몸체가 구역에 걸친 함선: 걸친 부분을 구역 아래에 굵은 선으로 (이 선이 보이면 피해)
+      for (const side of ['player', 'enemy']) {
+        const nx = this.nose(side).x, tx = this.tail(side);
+        const a = Math.max(Math.min(nx, tx), x1), b = Math.min(Math.max(nx, tx), x2);
+        if (b < a - 0.5) continue;
+        g.strokeStyle = side === 'player' ? 'rgba(92,225,230,0.95)' : 'rgba(255,90,95,0.95)'; g.lineWidth = 4;
+        g.beginPath(); g.moveTo(a, cy + h / 2 - 4); g.lineTo(Math.max(b, a + 3), cy + h / 2 - 4); g.stroke();
       }
       // 이름표
       g.font = "900 12px 'Malgun Gothic', sans-serif"; g.textAlign = 'center'; g.textBaseline = 'middle';

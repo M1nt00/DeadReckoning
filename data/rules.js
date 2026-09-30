@@ -6,7 +6,8 @@ window.DATA = window.DATA || {};
 DATA.rules = {
   maxDistance: 2000,     // 최대 거리 (km)
   step: 100,             // 거리 단위
-  startDistance: 1200,   // 시작 거리
+  startDistance: 1200,   // 시작 거리 (= 뱃머리 사이 거리. 0km = 뱃머리끼리 맞닿음)
+  shipLength: 100,       // 함선 길이 (km): 뱃머리에서 뒤로. 전장 구역에 몸체가 조금이라도 걸치면 피해
   handSize: 5,           // 매 턴 손패
   carryMax: 2,           // 다음 턴으로 넘어가는 연료 최대
   coolPerFuel: 15,       // 연료 1을 냉각에 쓰면 열 −15

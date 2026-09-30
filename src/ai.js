@@ -98,7 +98,7 @@ function aiPlan(B) {
       score -= Math.abs(d - E.prefer) / 90;
       // 적용 중인 전장 구역 안에서 기동을 마치면 피해
       const xAfter = E.side === 'enemy' ? B.xE - s2.move * R.step : B.xP + s2.move * R.step;
-      for (const f of fieldsAt(B, xAfter)) score -= f.dmg;
+      for (const f of fieldsOn(B, E.side, xAfter)) score -= f.dmg;
       // 열 위험
       if (s2.heatAfter >= R.meltdownHeat) score -= 40;
       else if (s2.heatAfter >= R.dangerHeat) score -= 10;

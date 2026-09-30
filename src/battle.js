@@ -144,9 +144,14 @@ function fieldZone(B, s, it) {
   const a = x0 + dir * (it.at || 0) * st, b = a + dir * c.zone.width * st;
   return { lo: Math.min(a, b), hi: Math.max(a, b) };
 }
-// 이 위치를 덮는 전장 (적용 중인 것만). 경계에 걸쳐도 안으로 침
+// 함선 몸체 (km): 위치 = 뱃머리, 몸체는 뱃머리에서 뒤로 shipLength. 나는 뒤 = 왼쪽, 적은 뒤 = 오른쪽
+function shipBody(side, x) { const L = R().shipLength; return side === 'player' ? [x - L, x] : [x, x + L]; }
+// 이 함선 몸체에 걸친 전장 (적용 중인 것만). 조금이라도 걸치면 (경계 포함) 안으로 침
 const fieldActive = (B, f) => f.born < B.turn && B.turn <= f.born + f.turns;
-function fieldsAt(B, x) { return B.fields.filter((f) => fieldActive(B, f) && x >= f.lo && x <= f.hi); }
+function fieldsOn(B, side, x) {
+  const [a, b] = shipBody(side, x);
+  return B.fields.filter((f) => fieldActive(B, f) && f.hi >= a && f.lo <= b);
+}
 // 구역 위치 글: 깐 배 기준 (+ = 적 쪽 앞, − = 뒤)
 function zoneLabel(it, ship = '내 배') {
   const w = DATA.cards[it.id].zone.width, a = (it.at || 0) * 100, b = a + w * 100, km = (v) => v.toLocaleString() + 'km';
@@ -351,7 +356,7 @@ function resolveSteps(B) {
       const desc = (m) => (m > 0 ? `${m * 100}km 전진` : m < 0 ? `${-m * 100}km 후진` : '정지');
       B.log.push({ t: 'move', text: `기동: 나 ${desc(pm)} · 적 ${desc(em)} → ${before}km → ${B.distance}km` });
       // 전장: 기동을 마친 위치가 구역 안이면 피해 (지나가기만 하면 영향 없음 · 적용 중인 구역만)
-      for (const s of ships) for (const f of fieldsAt(B, s === P ? B.xP : B.xE)) {
+      for (const s of ships) for (const f of fieldsOn(B, side(s), s === P ? B.xP : B.xE)) {
         ev(Object.assign({ kind: 'fieldHit', who: side(s), name: f.name, dmg: f.dmg }, hit(B, s, f.dmg, `${f.name} (${f.side === 'player' ? '내' : '적'} 전장)`)));
       }
       over();
