@@ -450,7 +450,7 @@ const Scene = {
   // dtReal = 실제로 흐른 시간. 슬로모션 중엔 게임 시간이 느리게 흐름
   update(dtReal) {
     this.real += dtReal;
-    const dt = dtReal * (this.real < this.slowUntil ? 0.3 : 1);
+    const dt = dtReal * (this.real < this.slowUntil ? 0.3 : 1) * (this.boost || 1);   // boost: 넘기기 (빨리 감기)
     this.time += dt;
     // 카메라 · 레터박스 · 번쩍임은 실제 시간으로 부드럽게
     const ck = 1 - Math.exp(-4.5 * dtReal);

@@ -624,3 +624,10 @@ body.onVoyage #top, body.onVoyage #field, body.onVoyage #tray, body.onVoyage #lo
 .rcard[data-type=field] { border-color: rgba(230,184,115,0.8); } .rcard[data-type=field] .ri { color: var(--field); }
 .dtype[data-type=field] { color: var(--field); }
 .pileItem[data-type=field] .ri { color: var(--field); }
+
+/* 넘기기 안내 (처리 중에만) */
+#skipHint { position: absolute; right: 16px; bottom: 10px; font-size: 12px; color: var(--dim); background: rgba(6,10,20,0.7); border: 1px solid var(--line); padding: 3px 10px; border-radius: 4px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 3; }
+body.resolving #skipHint { opacity: 1; }
+/* 빈 단계 묶음: 가운데 글자를 가로로 */
+#reveal.emptyGroup .revealMid { writing-mode: horizontal-tb; font-size: 14px; letter-spacing: 1px; padding: 8px 12px; border: 1px solid rgba(255,181,71,0.4); }
+#reveal.emptyGroup .rcard.none { height: 64px; width: 120px; }

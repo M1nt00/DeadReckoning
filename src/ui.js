@@ -440,6 +440,34 @@ function phaseCardHTML(x, i, big) {
   const extra = c.variable ? mvTxt(it.steps) : c.move ? mvTxt(c.move) : c.zone ? zoneLabel(it, '그 배') : (c.preempt ? '선제 ' : '') + TYPE_NAME[c.type];
   return `<div class="rcard front" data-type="${c.type}" ${delay}><span class="ri">${iconSVG(it.id, 46)}</span>${c.name}<small>${extra}</small></div>`;
 }
+// 넘기기 (클릭 · Space): 지금 기다림을 바로 끝내고, 지금 단계의 연출은 빨리 감기
+let skipFn = null;
+function waitS(ms) {
+  return new Promise((res) => {
+    const done = () => { clearTimeout(t); if (skipFn === done) skipFn = null; res(); };
+    const t = setTimeout(done, ms);
+    skipFn = done;
+  });
+}
+function skipNow() {
+  if (!resolving) return;
+  Scene.boost = 8;
+  if (skipFn) skipFn();
+}
+
+// 양쪽 다 안 낸 단계가 이어지면 한 번에 짧게: '특수능력 · 전장 · 시스템 — 없음'
+async function revealEmpty(names) {
+  const el = $('reveal');
+  el.classList.remove('sysPhase');
+  el.classList.add('emptyGroup');
+  el.querySelector('.revealMid').textContent = names.join(' · ');
+  el.querySelector('.me').innerHTML = el.querySelector('.foe').innerHTML = '<div class="rcard front none">없음</div>';
+  el.classList.remove('docked', 'hidden');
+  await waitS(550);
+  el.classList.add('docked');
+  el.classList.remove('emptyGroup');
+}
+
 async function revealPhase(step, mine, theirs) {
   const el = $('reveal');
   const me = el.querySelector('.me'), foe = el.querySelector('.foe'), mid = el.querySelector('.revealMid');
@@ -447,16 +475,17 @@ async function revealPhase(step, mine, theirs) {
   const html = (list, front) => (list.length ? list.map((x, i) => (front ? phaseCardHTML(x, i, big) : '<div class="rcard back"></div>')).join('')
     : '<div class="rcard front none">없음</div>');
   el.classList.toggle('sysPhase', big);
+  el.classList.remove('emptyGroup');
   mid.textContent = step.name;
   me.innerHTML = html(mine, false);
   foe.innerHTML = html(theirs, false);
   el.classList.remove('docked', 'hidden');
-  await sleep(380);
+  await waitS(380);
   me.innerHTML = html(mine, true);
   foe.innerHTML = html(theirs, true);
-  await sleep(!mine.length && !theirs.length ? 500 : big ? 1200 : 850);   // 둘 다 '없음'이면 짧게
+  await waitS(big ? 1200 : 850);
   el.classList.add('docked');
-  await sleep(260);
+  await waitS(260);
 }
 
 // ── 턴 요약: 이번 턴 누가 더 잘 읽었나 ─────────
@@ -587,6 +616,7 @@ function pickUp(i) {
 }
 
 document.addEventListener('pointerdown', (e) => {
+  if (resolving && B && !e.target.closest('.topBtn')) { skipNow(); return; }   // 처리 중 클릭 = 넘기기
   // 숫자키로 집은 카드: 클릭한 곳에서 확정 / 취소
   if (drag && drag.sticky) { e.preventDefault(); endAim(drag, e.clientX, e.clientY); drag = null; window.__eatUp = true; return; }
   // [자세히] 버튼: 끌기 대신 설명창
@@ -665,20 +695,35 @@ async function decide() {
   const turn = B.turn, allEv = [];
   render();
   Scene.cine = 1;
-  for (const step of resolveSteps(B)) {
-    // 이 단계에 낸 것이 있으면 먼저 공개 (선택은 바꿀 수 없음 — 공개만 단계별로)
-    const mine = phaseItems(step, B.player), theirs = phaseItems(step, B.enemy);
+  const steps = resolveSteps(B);
+  const empty = (st) => st.reveal && !phaseItems(st, B.player).length && !phaseItems(st, B.enemy).length;
+  const runStep = async (step) => {
+    Scene.boost = 1;
     stepName = step.name;
-    renderHud();
-    if (step.reveal) await revealPhase(step, mine, theirs);   // 공개 단계는 늘 보여줌 (둘 다 안 냈으면 '없음')
     B.events = [];
     step.run();
     renderHud();
     allEv.push(...B.events);
     await Scene.play(B.events);
     render();
-    if (B.phase === 'over') break;
+  };
+  for (let i = 0; i < steps.length && B.phase !== 'over'; i++) {
+    const step = steps[i];
+    stepName = step.name;
+    renderHud();
+    if (empty(step)) {
+      // 이어지는 빈 단계를 묶어서 한 번에 '없음' → 차례로 처리
+      const group = [step];
+      while (i + 1 < steps.length && empty(steps[i + 1])) group.push(steps[++i]);
+      await revealEmpty(group.map((st) => st.name));
+      for (const st of group) { await runStep(st); if (B.phase === 'over') break; }
+      continue;
+    }
+    // 이 단계에 낸 것이 있으면 먼저 공개 (선택은 바꿀 수 없음 — 공개만 단계별로)
+    if (step.reveal) await revealPhase(step, phaseItems(step, B.player), phaseItems(step, B.enemy));
+    await runStep(step);
   }
+  Scene.boost = 1;
   stepName = null;
   $('reveal').classList.add('hidden');
   Scene.cine = 0;
@@ -686,7 +731,8 @@ async function decide() {
     Scene.sync(B); renderHud();          // 버텨낸 쪽 선체 1 반영
     if (B.winner !== 'player') Scene.destroy('player');
     if (B.winner !== 'enemy') Scene.destroy('enemy');
-    await sleep(2200);
+    await waitS(2200);
+    Scene.boost = 1;
     resolving = false;
     render();
     if (B.voyage) Voyage.battleEnd(B);
@@ -805,7 +851,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key >= '1' && e.key <= '5') pickUp(+e.key - 1);
   if (e.key === 'Escape' && drag) endAim(drag, null, null);
-  if (e.code === 'Space' || e.key === 'Enter') { e.preventDefault(); decide(); }
+  if (e.code === 'Space' || e.key === 'Enter') { e.preventDefault(); if (resolving) skipNow(); else decide(); }
   if (e.key.toLowerCase() === 'h') showHelp();
   if (e.key.toLowerCase() === 'l') toggleLog();
   if (B.phase === 'plan' && !resolving) {
