@@ -759,7 +759,14 @@ document.addEventListener('click', (e) => {
     if (btn.dataset.act === 'cool') P.plan.cool = Math.max(0, P.plan.cool + d);
     if (btn.dataset.act === 'engine') nudgeEngine(d);
     if (btn.dataset.act === 'od' && P.odCooldown === 0) P.plan.od = !P.plan.od;
-    P.plan.cool = Math.min(P.plan.cool, planSummary(P, Object.assign({}, P.plan, { cool: 0 })).left);
+    const want = P.plan.cool;
+    const s0 = planSummary(P, Object.assign({}, P.plan, { cool: 0 }));
+    P.plan.cool = Math.min(P.plan.cool, s0.left);
+    // 냉각을 더 올리려 했는데 막힘 → 이유 알려주기
+    if (btn.dataset.act === 'cool' && d > 0 && P.plan.cool < want) {
+      if (P.plan.od && s0.cap - s0.cost > s0.left) hint(`오버드라이브로 늘어난 연료(+${DATA.rules.overdriveFuel})는 냉각에 쓸 수 없어요 — 카드 · 기본 엔진에만`);
+      else hint('냉각에 쓸 연료가 남지 않았어요');
+    }
     render();
     return;
   }
