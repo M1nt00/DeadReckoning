@@ -47,7 +47,7 @@ DATA.ships = {
   vex: {
     name: '순찰 구축함 VEX-7', hull: 110, reactor: 5, cooling: 10, prefer: 800,
     doctrine: '중거리 사수', doctrineDesc: '레이저 · 어뢰 거리(600~900km)를 지키려 한다',
-    deck: ['laser', 'laser', 'laser', 'railgun', 'torpedo', 'torpedo', 'scatter', 'scatter',
-      'shield', 'shield', 'heavyShield', 'pointDefense', 'burn', 'retro', 'asteroids'],   // 소행성 지대 = 전장 시험용
+    deck: ['orbitShot', 'orbitShot', 'laser', 'laser', 'torpedo', 'guidedMissile', 'heavyShield',
+      'shield', 'shield', 'burn', 'retro', 'regenShield', 'ventPurge'],
   },
 };

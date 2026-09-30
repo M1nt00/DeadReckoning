@@ -631,3 +631,24 @@ body.resolving #skipHint { opacity: 1; }
 /* 빈 단계 묶음: 가운데 글자를 가로로 */
 #reveal.emptyGroup .revealMid { writing-mode: horizontal-tb; font-size: 14px; letter-spacing: 1px; padding: 8px 12px; border: 1px solid rgba(255,181,71,0.4); }
 #reveal.emptyGroup .rcard.none { height: 64px; width: 120px; }
+
+/* ── 카드 도감 ── */
+#codex { position: fixed; inset: 0; z-index: 40; background: rgba(2,3,10,0.94); backdrop-filter: blur(6px); display: flex; flex-direction: column; padding: 22px 28px 16px; gap: 12px; }
+#codex .cxHead { display: flex; align-items: center; justify-content: space-between; }
+#codex h1 { margin: 0; font-size: 26px; letter-spacing: 2px; }
+#codex h1 small { font-size: 14px; color: var(--dim); margin-left: 6px; }
+#codex .cxClose { background: rgba(255,255,255,0.06); border: 1px solid var(--line); border-radius: 6px; padding: 6px 14px; }
+#codex .cxTabs { display: flex; gap: 6px; flex-wrap: wrap; }
+#codex .cxTabs button { background: rgba(18,27,43,0.85); border: 1px solid var(--line); border-radius: 6px; padding: 6px 14px; font-size: 13px; }
+#codex .cxTabs button.on { background: var(--amber); color: #1A1204; border-color: var(--amber); font-weight: 900; }
+#codex .cxBody { flex: 1; min-height: 0; display: flex; gap: 18px; }
+#codex .cxGrid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, 176px); gap: 14px; align-content: start; padding: 4px; }
+#codex .codexCard { cursor: pointer; }
+#codex .codexCard.sel { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 10px 26px rgba(255,181,71,0.3); transform: translateY(-4px); }
+#codex .cxDetail { width: 340px; flex: none; overflow-y: auto; background: rgba(8,13,26,0.9); border: 1px solid rgba(255,181,71,0.35); border-radius: 10px; padding: 14px 16px; font-size: 13px; }
+#codex .cxDetail .dhead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+#codex .cxDetail .dhead .cost { width: 26px; height: 26px; border-radius: 50%; background: var(--fuel); color: #07210F; font-weight: 900; font-family: var(--mono); display: grid; place-items: center; font-size: 14px; }
+#codex .cxDetail .dhead b { font-size: 18px; flex: 1; }
+#codex .cxDetail .dhead .cheat { font-family: var(--mono); color: var(--heat); font-weight: 900; }
+#codex .cxDetail ul { margin: 8px 0 0; padding-left: 18px; color: #C9D3E4; line-height: 1.6; }
+#codex .cxDetail .mini { margin-top: 8px; }

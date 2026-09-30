@@ -188,8 +188,8 @@ DATA.cards = {
   },
 };
 
-// 시작 덱 (15장) — 소행성 지대 1장은 전장 시험용 (2026-10-01)
+// 시작 덱 (10장) — 카드 목록 '덱 짜기'에서 반영 (2026-10-01)
 DATA.starterDeck = [
-  'laser', 'laser', 'laser', 'railgun', 'railgun', 'torpedo', 'torpedo', 'scatter',
-  'shield', 'shield', 'shield', 'pointDefense', 'burn', 'retro', 'asteroids',
+  'laser', 'laser', 'laser', 'railgun', 'scatter', 'draw', 'pointDefense', 'shield', 'shield',
+  'shield',
 ];

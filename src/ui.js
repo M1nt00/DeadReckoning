@@ -328,9 +328,9 @@ function bandsOf(c) {
   return out.filter((b) => b[2] > 0);
 }
 
-function detailHTML(c) {
-  const R = DATA.rules, P = B.player, sum = planSummary(P, P.plan);
-  const now = B.distance, after = isPre(c) ? now : clamp(now - sum.move * R.step, 0, R.maxDistance);   // 선제: 기동 전 거리로 판정
+function detailHTML(c, codex) {
+  const R = DATA.rules, P = B.player, sum = codex ? { move: 0, od: false } : planSummary(P, P.plan);
+  const now = codex ? -1 : B.distance, after = codex || isPre(c) ? now : clamp(now - sum.move * R.step, 0, R.maxDistance);   // 선제: 기동 전 거리로 판정
   const km = (a, b) => (a === b ? fmtM(a) : `${a.toLocaleString()}~${fmtM(b)}`);
   let body = '';
   if (c.type === 'weapon' && c.dmg) {
@@ -339,7 +339,7 @@ function detailHTML(c) {
       return `<tr class="${here ? 'now' : ''} ${aft ? 'after' : ''}"><td>${km(a, b)}</td><td><b>${v}</b></td><td>${here ? '◀ 지금' : ''}${aft ? '◀ 이동 후' : ''}</td></tr>`;
     }).join('');
     body += `<div class="dsub">${c.torpedo ? '거리별 피해 — 다음 턴 도착했을 때의 거리' : '거리별 피해'}</div><table class="dtable">${rows}</table>${miniBar(c)}`;
-    if (!c.torpedo) body += `<div class="dnow">지금 ${fmtM(now)} → <b>${weaponDmg(c, now, sum.od)}</b>${after !== now ? ` · 이동 후 ${fmtM(after)} → <b>${weaponDmg(c, after, sum.od)}</b>` : ''} <small>(적이 가만히 있다면)</small></div>`;
+    if (!c.torpedo && !codex) body += `<div class="dnow">지금 ${fmtM(now)} → <b>${weaponDmg(c, now, sum.od)}</b>${after !== now ? ` · 이동 후 ${fmtM(after)} → <b>${weaponDmg(c, after, sum.od)}</b>` : ''} <small>(적이 가만히 있다면)</small></div>`;
   }
   const notes = [];
   if (isPre(c)) notes.push(c.type === 'weapon' ? '선제 — 기동보다 먼저 쏜다. 상대가 움직이기 전의 거리로 판정.' : '선제 — 기동보다 먼저 켜진다. 기동 단계의 피해부터 막는다.');
@@ -356,14 +356,50 @@ function detailHTML(c) {
   if (c.zone) notes.push(`전장 — 내 함선에 놓고, 계획 줄의 ◀ ▶로 구역 위치를 정한다 (내 배 앞 · 뒤 어디든). 깔린 뒤엔 그 자리에 고정.`,
     `구역을 만든 <b>다음 턴부터 ${c.zone.turns}턴</b> 동안 적용. 기동을 마쳤을 때 몸체(길이 ${DATA.rules.shipLength}km)가 조금이라도 구역에 걸친 함선은 매 턴 피해 ${c.zone.dmg} (나도 포함). 지나가기만 하면 영향 없음.`,
     '1인당 하나 — 새로 깔면 내 이전 전장은 사라진다.');
-  if (c.inertia) { const m = itemMove({ id: 'inertia' }, B.player); notes.push(`지금이라면: ${m > 0 ? m * 100 + 'km 전진' : m < 0 ? -m * 100 + 'km 후진' : '이동 없음 (지난 턴에 정지)'}`); }
+  if (c.inertia && !codex) { const m = itemMove({ id: 'inertia' }, B.player); notes.push(`지금이라면: ${m > 0 ? m * 100 + 'km 전진' : m < 0 ? -m * 100 + 'km 후진' : '이동 없음 (지난 턴에 정지)'}`); }
   if (c.type === 'support') notes.push('지원 카드 — 내 함선에 놓는 즉시 사용 (연료도 즉시). 상대에게 공개되지 않는다.');
   if (c.selfDamage) notes.push(`명중하면 나도 피해 ${c.selfDamage}.`);
   if (c.type === 'weapon' && !c.charge) notes.push(`오버드라이브 중이면 피해 +${Math.round(R.overdriveBonus * 100)}%.`);
   if (c.type !== 'weapon') notes.push(c.desc);
+  if (codex) {                                      // 도감: 이 카드가 들어 있는 덱
+    const where = [['나침반 (내 배)', DATA.starterDeck]].concat(Object.values(DATA.ships).filter((s) => s.deck).map((s) => [s.name, s.deck]))
+      .map(([nm, d]) => [nm, d.filter((x) => x === codex).length]).filter(([, n]) => n);
+    notes.push(where.length ? '들어 있는 덱: ' + where.map(([nm, n]) => `${nm} ${n}장`).join(' · ') : '아직 어느 덱에도 없음 (항해 보상으로만)');
+  }
   return `<div class="dhead"><span class="cost">${c.variable ? '?' : c.cost}</span><b>${c.name}</b><span class="dtype" data-type="${c.type}">${TYPE_NAME[c.type]}</span><span class="cheat">🔥${c.heat}</span></div>
     ${body}${notes.length ? `<ul>${notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : ''}`;
 }
+
+// ── 카드 도감 (메인 화면) ─────────────────────
+let codexTab = 'all', codexSel = null;
+const CODEX_TABS = [['all', '전체'], ['weapon', '무기'], ['defense', '방어'], ['move', '기동'], ['system', '시스템'], ['field', '전장'], ['support', '지원']];
+function codexCardHTML(id) {
+  const c = DATA.cards[id];
+  return `<div class="card codexCard ${codexSel === id ? 'sel' : ''}" data-type="${c.type}" data-codex="${id}">
+    <div class="ctop"><span class="cost">${c.cost}</span><span class="ctype">${TYPE_NAME[c.type]}</span><span class="cheat">🔥${c.heat}</span></div>
+    <div class="cart">${iconSVG(id, 40)}</div>
+    <div class="cbody"><div class="cname">${c.name}</div><div class="ctext ${(c.text || c.desc).length > 62 ? 'long' : ''}">${c.text || c.desc}</div></div>
+    ${c.type === 'system' ? '<div class="sysBadge">가장 먼저</div>' : ''}${c.type === 'support' ? '<div class="sysBadge supBadge">즉시 · 비공개</div>' : ''}${c.preempt ? '<div class="preBadge">선제</div>' : ''}
+  </div>`;
+}
+function renderCodex() {
+  const order = ['weapon', 'defense', 'move', 'system', 'field', 'support'];
+  const ids = Object.keys(DATA.cards).filter((id) => codexTab === 'all' || DATA.cards[id].type === codexTab)
+    .sort((a, b) => order.indexOf(DATA.cards[a].type) - order.indexOf(DATA.cards[b].type) || DATA.cards[a].cost - DATA.cards[b].cost || DATA.cards[a].name.localeCompare(DATA.cards[b].name, 'ko'));
+  const count = (t) => Object.values(DATA.cards).filter((c) => t === 'all' || c.type === t).length;
+  $('codex').innerHTML = `<div class="cxHead"><h1>카드 도감 <small>${Object.keys(DATA.cards).length}장</small></h1><button class="cxClose">닫기 (Esc)</button></div>
+    <div class="cxTabs">${CODEX_TABS.map(([k, l]) => `<button data-cxtab="${k}" class="${codexTab === k ? 'on' : ''}">${l} ${count(k)}</button>`).join('')}</div>
+    <div class="cxBody"><div class="cxGrid">${ids.map(codexCardHTML).join('')}</div>
+      <div class="cxDetail">${codexSel ? detailHTML(DATA.cards[codexSel], codexSel) : '<p class="pnote">카드를 누르면 자세한 효과가 여기에 나와요.</p>'}</div></div>`;
+}
+function showCodex() { codexSel = null; renderCodex(); $('codex').classList.remove('hidden'); }
+function hideCodex() { $('codex').classList.add('hidden'); }
+$('codex').addEventListener('click', (e) => {
+  const t = e.target.closest('[data-cxtab]'), card = e.target.closest('[data-codex]');
+  if (e.target.closest('.cxClose')) { hideCodex(); return; }
+  if (t) { codexTab = t.dataset.cxtab; renderCodex(); }
+  if (card) { codexSel = card.dataset.codex; renderCodex(); }
+});
 
 let detailHand = -1;
 function closeDetail() {
@@ -840,6 +876,7 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (Voyage.on && $('overlay').classList.contains('hidden')) { Voyage.key(e); return; }
+  if (!$('codex').classList.contains('hidden')) { if (e.key === 'Escape') hideCodex(); return; }   // 카드 도감
   if (onTitle && $('overlay').classList.contains('hidden')) {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); titleMove(e.key === 'ArrowDown' ? 1 : -1); }
     if (e.key === 'Enter' || e.code === 'Space') { e.preventDefault(); titlePick(titleItems()[titleSel].dataset.m); }
@@ -891,6 +928,7 @@ function titlePick(m) {
   if (m === 'endless') fadeTo(() => { hideTitle(); Voyage.startEndless(); });
   if (m === 'depth10') fadeTo(() => { hideTitle(); Voyage.startEndlessAt(10); });
   if (m === 'rules') showHelp();
+  if (m === 'codex') showCodex();
 }
 function showTitle() {
   onTitle = true;
