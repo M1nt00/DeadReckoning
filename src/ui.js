@@ -1,4 +1,4 @@
-// 화면: 전장 위 계기판 · 거리 자 · 계획 · 손패 · 기록 · 동시 공개 연출
+// 화면: 전장 위 계기판 · 거리 자 · 계획 · 손패 · 기록 · 단계별 공개 연출
 'use strict';
 
 let B = null;            // 지금 전투
@@ -53,7 +53,7 @@ function expectedDmg(P) {
   for (const it of P.plan.items) {
     const c = DATA.cards[it.id];
     if (c.type !== 'weapon') continue;
-    if (c.torpedo) torps++; else if (!c.charge) t += weaponDmg(c, d, sum.od);
+    if (c.torpedo) torps++; else if (!c.charge) t += weaponDmg(c, isPre(c) ? B.distance : d, sum.od);   // 선제: 기동 전 거리
   }
   return { dmg: t, torps, d };
 }
@@ -187,7 +187,7 @@ function renderHud() {
   hudUpdate($('hudEnemy'), B.enemy);
   statUpdate('player', planning ? planSummary(P, P.plan).heatAfter : undefined);
   statUpdate('enemy');
-  $('steps').innerHTML = ['기동', '방어', '공격', '열'].map((n, i) => `<span class="${stepName === n ? 'on' : ''}">${'①②③④'[i]} ${n}</span>`).join('');
+  $('steps').innerHTML = ['시스템', '선제', '기동', '방어', '공격', '열'].map((n, i) => `<span class="${stepName === n ? 'on' : ''}">${'①②③④⑤⑥'[i]} ${n}</span>`).join('');
   $('distLbl').innerHTML = `거리 <b>${fmtM(B.distance)}</b> · ${bandOf(B.distance)} <small>(적 함선에 마우스 → 조준경)</small>`;
   $('torps').innerHTML = B.torpedoes.map((t) => `<span class="${t.owner === P ? 'me' : 'foe'}">${t.owner === P ? '▶ 내 어뢰' : '◀ 적 어뢰'} 비행 중</span>`).join(' · ');
 }
@@ -322,7 +322,8 @@ function renderHand() {
       </div>
       <div class="cfoot"><span class="key">${i + 1}</span><button class="detailBtn" data-hand="${i}">자세히</button></div>
       ${locked ? '<div class="lockNote">교란으로 잠김</div>' : far ? `<div class="lockNote">${c.maxRange}km 이내에서만</div>` : ''}
-      ${c.type === 'system' ? '<div class="sysBadge">즉시</div>' : ''}
+      ${c.type === 'system' ? '<div class="sysBadge">가장 먼저</div>' : ''}
+      ${c.preempt ? '<div class="preBadge">선제</div>' : ''}
     </div>`;
   }).join('');
   skipDeal = false;
@@ -341,7 +342,7 @@ function bandsOf(c) {
 
 function detailHTML(c) {
   const R = DATA.rules, P = B.player, sum = planSummary(P, P.plan);
-  const now = B.distance, after = clamp(now - sum.move * R.step, 0, R.maxDistance);
+  const now = B.distance, after = isPre(c) ? now : clamp(now - sum.move * R.step, 0, R.maxDistance);   // 선제: 기동 전 거리로 판정
   const km = (a, b) => (a === b ? fmtM(a) : `${a.toLocaleString()}~${fmtM(b)}`);
   let body = '';
   if (c.type === 'weapon' && c.dmg) {
@@ -353,6 +354,8 @@ function detailHTML(c) {
     if (!c.torpedo) body += `<div class="dnow">지금 ${fmtM(now)} → <b>${weaponDmg(c, now, sum.od)}</b>${after !== now ? ` · 이동 후 ${fmtM(after)} → <b>${weaponDmg(c, after, sum.od)}</b>` : ''} <small>(적이 가만히 있다면)</small></div>`;
   }
   const notes = [];
+  if (isPre(c)) notes.push(c.type === 'weapon' ? '선제 — 기동보다 먼저 쏜다. 상대가 움직이기 전의 거리로 판정.' : '선제 — 기동보다 먼저 켜진다. 기동 단계의 피해부터 막는다.');
+  if (c.type === 'system') notes.push('공개 때 가장 먼저 발동해 이번 턴의 규칙을 바꾼다.');
   if (c.torpedo) notes.push('다음 턴에 도착해서 그때의 거리로 명중 판정. 점방어에 격추된다.');
   if (c.charge) notes.push(`${c.charge.turns}턴 동안 매 턴: 열 +${c.charge.heat} · 최대 연료 −${c.charge.fuel}`, `${c.charge.turns}턴 후: 거리 무관 피해 ${c.charge.dmg}${c.charge.enemyHeat ? ` · 상대 열 +${c.charge.enemyHeat}` : ''}`);
   if (c.ignoreShield) notes.push('관통 피해 — 보호막을 무시한다 (피해 감소는 적용).');
@@ -421,51 +424,41 @@ function render() {
   renderLog();
 }
 
-// ── 공개 연출: 카드 뒷면 → 동시에 뒤집힘 ─────
-function revealCards(plan, front) {
-  const extras = [];
-  if (plan.od) extras.push({ od: true });
-  if (plan.engine) extras.push({ engine: plan.engine });
-  if (!plan.items.length && !extras.length) return `<div class="rcard ${front ? 'front' : 'back'}">${front ? '대기<small>아무것도 안 함</small>' : ''}</div>`;
-  return plan.items.map((it, i) => {
-    const c = DATA.cards[it.id];
-    if (!front) return '<div class="rcard back"></div>';
-    const extra = c.variable ? (it.steps > 0 ? `${it.steps * 100}km 전진` : `${-it.steps * 100}km 후진`) : c.move ? (c.move > 0 ? `${c.move * 100}km 전진` : `${-c.move * 100}km 후진`) : TYPE_NAME[c.type];
-    return `<div class="rcard front" data-type="${c.type}" style="animation-delay:${i * 0.06}s"><span class="ri">${iconSVG(it.id, 32)}</span>${c.name}<small>${extra}</small></div>`;
-  }).join('') + extras.map((x) => {
-    if (!front) return '<div class="rcard back"></div>';
-    if (x.od) return `<div class="rcard front od"><span class="ri">${iconSVG('overdrive', 32)}</span>오버드라이브<small>무기 +50%</small></div>`;
-    return `<div class="rcard front" data-type="move"><span class="ri">${iconSVG('engine', 32)}</span>기본 엔진<small>${x.engine > 0 ? x.engine * 100 + 'km 전진' : -x.engine * 100 + 'km 후진'}</small></div>`;
-  }).join('');
+// ── 단계별 공개: 한 단계씩 카드 뒷면 → 동시에 뒤집힘 → 처리 ─────
+// 그 단계에 공개할 것: 계획한 카드 (+ 기동 단계엔 기본 엔진, 공격 단계엔 오버드라이브)
+function phaseItems(step, s) {
+  const out = step.reveal ? step.reveal(s).map((it) => ({ it })) : [];
+  if (step.engine && step.engine(s)) out.push({ engine: step.engine(s) });
+  if (step.od && step.od(s)) out.push({ od: true });
+  return out;
 }
-function sysRevealCards(list) {
-  if (!list.length) return '<div class="rcard front none">시스템 카드 없음</div>';
-  return list.map((id, i) => `<div class="rcard front sys" style="animation-delay:${i * 0.1}s"><span class="ri">${iconSVG(id, 44)}</span>${DATA.cards[id].name}<small>${DATA.cards[id].desc.replace('즉시: ', '')}</small></div>`).join('');
+const mvTxt = (m) => (m > 0 ? `${m * 100}km 전진` : `${-m * 100}km 후진`);
+function phaseCardHTML(x, i, big) {
+  const delay = `style="animation-delay:${i * 0.06}s"`;
+  if (x.od) return `<div class="rcard front od" ${delay}><span class="ri">${iconSVG('overdrive', 32)}</span>오버드라이브<small>무기 +50%</small></div>`;
+  if (x.engine) return `<div class="rcard front" data-type="move" ${delay}><span class="ri">${iconSVG('engine', 32)}</span>기본 엔진<small>${mvTxt(x.engine)}</small></div>`;
+  const it = x.it, c = DATA.cards[it.id];
+  if (big) return `<div class="rcard front sys" ${delay}><span class="ri">${iconSVG(it.id, 44)}</span>${c.name}<small>${c.desc}</small></div>`;
+  const extra = c.variable ? mvTxt(it.steps) : c.move ? mvTxt(c.move) : (c.preempt ? '선제 ' : '') + TYPE_NAME[c.type];
+  return `<div class="rcard front" data-type="${c.type}" ${delay}><span class="ri">${iconSVG(it.id, 32)}</span>${c.name}<small>${extra}</small></div>`;
 }
-async function showReveal() {
+async function revealPhase(step, mine, theirs) {
   const el = $('reveal');
   const me = el.querySelector('.me'), foe = el.querySelector('.foe'), mid = el.querySelector('.revealMid');
-  // ① 이번 턴 쓴 시스템 카드를 가장 먼저, 크게
-  const ps = B.player.usedSystem, es = B.enemy.usedSystem;
-  if (ps.length || es.length) {
-    el.classList.add('sysPhase');
-    mid.textContent = '시스템';
-    me.innerHTML = sysRevealCards(ps);
-    foe.innerHTML = sysRevealCards(es);
-    el.classList.remove('docked');
-    el.classList.remove('hidden');
-    await sleep(1700);
-    el.classList.remove('sysPhase');
-  }
-  mid.textContent = '동시 공개';
-  const myPlan = B.player.skip ? { items: [], engine: B.player.plan.engine } : B.player.plan;
-  me.innerHTML = revealCards(myPlan, false);
-  foe.innerHTML = revealCards(B.enemy.plan, false);
-  el.classList.remove('docked');
-  el.classList.remove('hidden');
-  await sleep(650);
-  me.innerHTML = revealCards(myPlan, true);
-  foe.innerHTML = revealCards(B.enemy.plan, true);
+  const big = step.name === '시스템';          // 시스템 카드는 가장 먼저, 크게
+  const html = (list, front) => (list.length ? list.map((x, i) => (front ? phaseCardHTML(x, i, big) : '<div class="rcard back"></div>')).join('')
+    : '<div class="rcard front none">없음</div>');
+  el.classList.toggle('sysPhase', big);
+  mid.textContent = step.name;
+  me.innerHTML = html(mine, false);
+  foe.innerHTML = html(theirs, false);
+  el.classList.remove('docked', 'hidden');
+  await sleep(380);
+  me.innerHTML = html(mine, true);
+  foe.innerHTML = html(theirs, true);
+  await sleep(big ? 1200 : 850);
+  el.classList.add('docked');
+  await sleep(260);
 }
 
 // ── 턴 요약: 이번 턴 누가 더 잘 읽었나 ─────────
@@ -497,7 +490,7 @@ function planHas(i) { return B.player.plan.items.some((it) => it.hand === i); }
 // 조준 중인 카드가 목표 위에 있을 때 보여줄 글자
 function aimInfo(id, hand) {
   const c = DATA.cards[id], P = B.player;
-  if (c.type === 'system') return { text: `${c.name} · 즉시 발동`, sub: c.desc.replace('즉시: ', ''), color: '#C08BFF' };
+  if (c.type === 'system') return { text: `${c.name} · 공개 때 가장 먼저 발동`, sub: c.desc, color: '#C08BFF' };
   if (c.maxRange !== undefined && B.distance > c.maxRange) return { text: `${c.name} · ${c.maxRange}km 이내에서만 (지금 ${fmtM(B.distance)})`, color: '#FF5A5F' };
   if (c.dmgReduce) return { text: `${c.name} · 100km 후진 · 받는 피해 −${Math.round(c.dmgReduce * 100)}%`, color: '#9DB8FF' };
   if (c.type !== 'weapon') {
@@ -509,13 +502,13 @@ function aimInfo(id, hand) {
   // 이 카드까지 넣었을 때의 계획 기준
   const plan = Object.assign({}, P.plan, { items: P.plan.items.concat([{ hand, id, steps: 0 }]) });
   const sum = planSummary(P, plan);
-  const d = clamp(B.distance - sum.move * 100, 0, DATA.rules.maxDistance);
+  const d = isPre(c) ? B.distance : clamp(B.distance - sum.move * 100, 0, DATA.rules.maxDistance);   // 선제: 기동 전 거리
   if (c.charge) return { text: `${c.name} → ${c.charge.turns}턴 뒤 ${c.charge.dmg} 피해${c.charge.enemyHeat ? ` · 상대 열 +${c.charge.enemyHeat}` : ''}`, sub: `거리 무관 · ${c.charge.turns}턴 동안 매 턴 열 +${c.charge.heat} · 최대 연료 −${c.charge.fuel}`, color: '#FFC24A' };
   if (c.torpedo) return { text: `어뢰 발사 · 다음 턴 도착`, sub: `그때 500~900km면 ${weaponDmg(c, 700, sum.od)} · 지금 ${fmtM(d)}`, color: '#FFB547' };
   const dmg = weaponDmg(c, d, sum.od), eff = efficiency(c, d);
   const tag = eff >= 0.9 ? '강한 거리' : eff >= 0.6 ? '쓸 만한 거리' : eff > 0 ? '약한 거리' : '사거리 밖';
   const color = eff >= 0.9 ? '#7CFF9B' : eff >= 0.6 ? '#FFD166' : eff > 0 ? '#FFB547' : '#FF5A5F';
-  return { text: `${c.name} → ${dmg} 피해 · ${tag}`, sub: `${sum.move ? '내 이동 후 ' : ''}${fmtM(d)} (적이 가만히 있다면)`, color };
+  return { text: `${c.name} → ${dmg} 피해 · ${tag}`, sub: isPre(c) ? `선제 — 기동 전 거리 ${fmtM(d)}로 판정` : `${sum.move ? '내 이동 후 ' : ''}${fmtM(d)} (적이 가만히 있다면)`, color };
 }
 
 function hint(msg) {
@@ -559,18 +552,11 @@ function endAim(d, x, y) {
   const want = DATA.cards[d.id].type === 'weapon' ? 'enemy' : 'player';
   if (Scene.hitShip(x, y) === want && !planHas(d.hand)) {
     const c = DATA.cards[d.id];
-    if (c.type === 'system') {                       // 시스템: 계획에 넣지 않고 바로 발동
-      if (!useSystem(B, B.player, d.hand)) { hint(`연료가 모자라요 (${c.name}: 연료 ${c.cost})`); renderRange(); return; }
-      Scene.lockOn('player', `${c.name} 발동`, '#C08BFF');
-      Scene.flash(Scene.pos('player').x, Scene.pos('player').y, 90, '#C08BFF', 0.5);
-      P_afterSystem();
-      return;
-    }
     if (c.maxRange !== undefined && B.distance > c.maxRange) { hint(`${c.name}는 ${c.maxRange}km 이내에서만 쓸 수 있어요`); renderRange(); return; }
     const info = want === 'enemy' ? aimInfo(d.id, d.hand) : null;   // 넣기 전에 계산
     togglePlan(d.hand);
     if (want === 'enemy') Scene.lockOn('enemy', `TARGET LOCKED · ${c.name}`, info.color);
-    else Scene.lockOn('player', `${c.name} 준비`, c.type === 'defense' ? '#9DB8FF' : '#7CFF9B');
+    else Scene.lockOn('player', `${c.name} 준비`, c.type === 'defense' ? '#9DB8FF' : c.type === 'system' ? '#C08BFF' : '#7CFF9B');
     flyCard(d.src, x, y, d.hand);
   } else renderRange();
 }
@@ -628,26 +614,17 @@ document.addEventListener('pointerup', (e) => {
     drag = null;
     // 짧게 클릭: 넣은 카드면 빼고, 아니면 사용법 안내
     if (planHas(d.hand)) togglePlan(d.hand);
-    else hint(DATA.cards[d.id].type === 'weapon' ? '카드를 끌어서 적 함선에 조준하세요 (또는 숫자키)' : DATA.cards[d.id].type === 'system' ? '시스템 카드: 내 함선에 놓으면 바로 발동해요 (또는 숫자키)' : '카드를 끌어서 내 함선에 놓으세요 (또는 숫자키)');
+    else hint(DATA.cards[d.id].type === 'weapon' ? '카드를 끌어서 적 함선에 조준하세요 (또는 숫자키)' : DATA.cards[d.id].type === 'system' ? '시스템 카드: 내 함선에 놓으면 공개 때 가장 먼저 발동해요 (또는 숫자키)' : '카드를 끌어서 내 함선에 놓으세요 (또는 숫자키)');
     renderRange();
     return;
   }
   endAim(d, e.clientX, e.clientY);
 });
 
-// 시스템 카드를 쓴 뒤: 손패가 한 장 줄었으니 다시 그림 (올라오기 연출 없이)
-function P_afterSystem() {
-  const P = B.player;
-  P.plan.cool = Math.min(P.plan.cool, planSummary(P, Object.assign({}, P.plan, { cool: 0 })).left);
-  skipDeal = true;
-  render();
-}
-
 function togglePlan(i) {
   const P = B.player;
   if (B.phase !== 'plan' || resolving || P.skip || i >= P.hand.length || i === P.locked) return;
   const tc = DATA.cards[P.hand[i]];
-  if (tc.type === 'system' && !P.plan.items.some((it) => it.hand === i)) return;               // 시스템은 계획에 안 넣음
   if (tc.maxRange !== undefined && B.distance > tc.maxRange && !P.plan.items.some((it) => it.hand === i)) { hint(`${tc.name}는 ${tc.maxRange}km 이내에서만 쓸 수 있어요`); return; }
   const k = P.plan.items.findIndex((it) => it.hand === i);
   if (k >= 0) P.plan.items.splice(k, 1);
@@ -670,19 +647,18 @@ async function decide() {
   const P = B.player;
   if (B.phase !== 'plan' || resolving || !planSummary(P, P.plan).ok) return;
   if (drag) endAim(drag, null, null);
-  aiSystem(B, B.enemy);                 // 적도 시스템 카드를 먼저 (즉시)
   B.enemy.plan = aiPlan(B);
   resolving = true;
   $('turnSum').classList.add('hidden');
   const turn = B.turn, allEv = [];
   render();
   Scene.cine = 1;
-  await showReveal();
-  await sleep(1150);
-  $('reveal').classList.add('docked');
-  await sleep(350);
   for (const step of resolveSteps(B)) {
+    // 이 단계에 낸 것이 있으면 먼저 공개 (선택은 바꿀 수 없음 — 공개만 단계별로)
+    const mine = phaseItems(step, B.player), theirs = phaseItems(step, B.enemy);
     stepName = step.name;
+    renderHud();
+    if (mine.length || theirs.length) await revealPhase(step, mine, theirs);
     B.events = [];
     step.run();
     renderHud();
@@ -750,14 +726,15 @@ function showHelp() {
     <h1>규칙</h1>
     <ul>
       <li><b>몰래 고르고 동시에 공개.</b> 손패에서 카드를 골라 계획을 세우고 [결정]. 적도 같은 순간 몰래 고른다.</li>
-      <li><b>처리 순서: ① 기동 → ② 방어 → ③ 공격 → ④ 열.</b> 기동이 먼저라서, 공격은 <b>바뀐 거리</b>로 판정된다. 상대가 어디로 갈지 추측하라.</li>
+      <li><b>단계별 공개 · 처리: ① 시스템 → ② 선제 → ③ 기동 → ④ 방어 → ⑤ 공격 → ⑥ 열.</b> 카드는 계획 때 모두 정하고, 공개만 단계마다 한다 (공개 중엔 못 바꾼다). 기동이 공격보다 먼저라서, 공격은 <b>바뀐 거리</b>로 판정된다. 상대가 어디로 갈지 추측하라.</li>
       <li><b>거리</b> 0 ~ 2,000km. 다음 거리 = 지금 − 내 전진 − 적 전진. 무기마다 강한 거리가 다르다. <b>적 함선에 마우스를 올리면 조준경</b>이 뜬다 (거리 · 거리 자).</li>
       <li><b>카드 사용:</b> 무기는 <b>끌어서 적 함선에 조준</b> — 저격 조준경 안의 거리 자에 강한 거리(초록)가, 옆에 예상 피해가 보인다. 방어 · 기동 카드는 <b>내 함선에 끌어다 놓기</b>. 넣은 카드는 클릭하면 뺀다.</li>
       <li>무기가 맞으면 <b>예측 판정</b>이 뜬다: 효율 90%↑ 예측 적중 · 60%↑ 유효 사격 · 그 아래는 빗나간 예측.</li>
       <li><b>어뢰</b>는 다음 턴에 도착한다. 그때의 거리가 500~900km면 큰 피해. 점방어로 막을 수 있다.</li>
       <li><b>연료</b>는 매 턴 5. 남는 연료는 냉각(1당 열 −15)에 돌리거나 2까지 이월. 적의 연료는 보이지 않는다.</li>
       <li><b>기본 엔진</b>은 카드 없이 언제나: 연료 1당 100km · 열 +5, <b>연료가 허락하는 만큼</b> 멀리 (←/→ 100km, Shift+←/→ 500km). 급가속 · 역분사 카드는 연료 2로 500km — 싸지만 뜨겁다.</li>
-      <li><b>시스템 카드 (보라색 · 즉시)</b>: 내 함선에 놓으면 계획 중에 <b>바로 발동</b>한다 (연료 · 열도 즉시). 되돌릴 수 없다. 동시 공개 때 양쪽이 쓴 시스템 카드가 <b>가장 먼저, 크게</b> 공개된다.</li>
+      <li><b>시스템 카드 (보라색)</b>: 내 함선에 놓으면 공개 때 <b>가장 먼저, 크게</b> 공개되고 발동해 그 턴의 규칙을 바꾼다 (예: 강제 배기 = 곧바로 열 −40).</li>
+      <li><b>선제</b>가 붙은 무기 · 방어 카드는 기동보다 먼저 쓰인다. 선제 무기는 <b>상대가 움직이기 전의 거리</b>로 맞히고, 선제 방어는 기동 단계부터 막는다.</li>
       <li><b>⚡ 오버드라이브</b>는 비장의 한 수 (O): 이번 턴 연료 +3 · <b>무기 피해 +50%</b> · 열 +30. 쓰고 나면 4턴 충전. 적의 충전 상태도 보인다.</li>
       <li><b>열</b> 매 턴 냉각기가 −10. 50↑ 보호막 약화 · 80↑ 다음 턴 최대 연료 −1 · 100 멜트다운(선체 −30, 다음 턴은 기본 엔진으로 이동만 — 그 턴이 끝나면 열 40).</li>
       <li><b>교란</b>: 다음 턴 손패 1장이 잠긴다 (군사작전). 걸릴 때마다 쌓이고, 턴마다 1씩 줄어든다.</li>

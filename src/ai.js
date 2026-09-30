@@ -21,7 +21,17 @@ function aiPlan(B) {
     return { items: [], cool: 0, engine, od: false };
   }
 
-  // 시스템 카드(즉시)는 계획에 안 넣음 · 물러나기는 400km 이내에서만
+  // 시스템 카드 (공개 때 가장 먼저 사용): 열 상황을 보고 미리 고름 → 모든 계획에 들어감
+  const sysItems = [];
+  let sysCost = 0;
+  E.hand.forEach((id, i) => {
+    const c = DATA.cards[id];
+    if (c.type !== 'system' || i === E.locked) return;
+    const room = E.fuel - sysCost >= c.cost + 2;
+    const want = c.heatNow ? E.heat >= 55 : c.coolStatus ? E.coolTurns === 0 && E.heat >= 35 && !sysItems.some((x) => DATA.cards[x.id].coolStatus) : false;
+    if (want && room) { sysItems.push({ hand: i, id, steps: 0 }); sysCost += c.cost; }
+  });
+  // 물러나기는 400km 이내에서만
   const hand = E.hand.map((id, i) => ({ id, i })).filter((h) => h.i !== E.locked && DATA.cards[h.id].type !== 'system'
     && !(DATA.cards[h.id].maxRange !== undefined && B.distance > DATA.cards[h.id].maxRange));
   const cardsNoMove = hand.filter((h) => DATA.cards[h.id].type !== 'move');
@@ -46,7 +56,7 @@ function aiPlan(B) {
   for (let mask = 0; mask < 1 << n; mask++) {
     const picks = cardsNoMove.filter((_, k) => mask & (1 << k)).map((h) => ({ hand: h.i, id: h.id, steps: 0 }));
     for (const mv of moveOpts) for (const engine of engOpts) for (const od of odOpts) {
-      const items = mv ? picks.concat([mv]) : picks;
+      const items = sysItems.concat(mv ? picks.concat([mv]) : picks);
       const plan = { items, cool: 0, engine, od };
       const sum = planSummary(E, plan);
       if (!sum.ok) continue;
@@ -57,7 +67,8 @@ function aiPlan(B) {
       let score = 0, wdmg = 0;
       for (const it of items) {
         const c = DATA.cards[it.id];
-        if (c.type === 'weapon') wdmg += c.torpedo ? weaponDmg(c, clamp(d - predMove * 100, 0, 2000), od) * 0.7 : weaponDmg(c, d, od);
+        if (c.type === 'weapon') wdmg += c.torpedo ? weaponDmg(c, clamp(d - predMove * 100, 0, 2000), od) * 0.7
+          : weaponDmg(c, isPre(c) ? B.distance : d, od);                  // 선제: 기동 전 거리로 판정
         if (c.charge) wdmg += c.charge.dmg * 0.45;                       // 초고열 응집: 늦게 오는 큰 한 방
         if (c.jam && weaponDmg(c, d, od)) score += 5 * c.jam;             // 교란
         if (c.shield) score += Math.min(c.shield, expectedIncoming) * 0.8;
@@ -84,15 +95,4 @@ function aiPlan(B) {
   const sum = planSummary(E, Object.assign({}, best, { cool: 0 }));
   best.cool = E.heat + sum.heatIn > 40 ? sum.left : Math.max(0, sum.left - DATA.rules.carryMax);
   return best;
-}
-
-// 적의 시스템 카드 (즉시 사용): 계획 전에 판단
-function aiSystem(B, E) {
-  if (E.skip) return;
-  for (let i = E.hand.length - 1; i >= 0; i--) {
-    const c = DATA.cards[E.hand[i]];
-    if (c.type !== 'system' || i === E.locked) continue;
-    if (c.heatNow && E.heat >= 55 && E.fuel >= c.cost + 2) useSystem(B, E, i);
-    else if (c.coolStatus && E.coolTurns === 0 && E.heat >= 35 && E.fuel >= c.cost + 2) useSystem(B, E, i);
-  }
 }

@@ -1,5 +1,6 @@
 // ─────────────────────────────────────────────
 //  카드 — 무기 · 방어 · 기동 · 시스템   (수치 = 카드 목록 dr-cards.json 기준, 2026-10-01)
+//  preempt: true = 선제 (무기 · 방어만). 기동보다 먼저 — 선제 무기는 기동 전 거리로 판정
 //  숫자만 바꾸고 저장 → 브라우저 새로고침(F5)
 //  text: 카드 앞면 설명 (카드 목록의 '설명'). 없으면 desc를 씀 · desc: 요약 ([자세히]에도 나옴)
 //
@@ -98,16 +99,16 @@ DATA.cards = {
     desc: '0km에서만. 관통 피해 20 + 교란 1 (다음 턴 손패 1장 잠김)',
   },
 
-  // ── 시스템 (즉시 사용: 계획 중에 바로 발동, 동시 공개 때 가장 먼저 공개) ──
+  // ── 시스템 (공개 때 가장 먼저 발동해 그 턴의 규칙을 바꿈) ──
   coolCatalyst: {
-    name: '냉각 촉매', type: 'system', cost: 2, heat: 0, instant: true,
+    name: '냉각 촉매', type: 'system', cost: 2, heat: 0,
     coolStatus: { turns: 3, amount: 7 },
-    desc: '즉시: 이번 턴부터 3턴 동안 매 턴 열 −7',
+    desc: '이번 턴부터 3턴 동안 매 턴 열 −7',
   },
   ventPurge: {
-    name: '강제 배기', type: 'system', cost: 3, heat: 0, instant: true,
+    name: '강제 배기', type: 'system', cost: 3, heat: 0,
     heatNow: -40,
-    desc: '즉시: 열 −40',
+    desc: '곧바로 열 −40',
   },
 };
 

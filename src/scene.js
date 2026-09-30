@@ -172,6 +172,10 @@ const Scene = {
       if (e.kind === 'evade') this.after(t, () => { const p = this.pos(e.who); this.text(p.x, p.y + 64, `물러나기 · 피해 −${e.pct}%`, '#9DB8FF', 14); this.ring(p.x, p.y, 90, '#9DB8FF', 0.5); });
       if (e.kind === 'heat') this.after(t, () => { this.ships[e.who].heat = e.heat; if (e.overdrive) this.vent(e.who); });
       if (e.kind === 'meltdown') { this.after(t, () => this.animMeltdown(e.who)); t += 1.1; }
+      if (e.kind === 'system') {                // 시스템 카드 발동: 보라색 빛
+        this.after(t, () => { const p = this.pos(e.who); this.ring(p.x, p.y, 110, '#C08BFF', 0.6); this.flash(p.x, p.y, 120, '#C08BFF', 0.5); this.text(p.x, p.y - 20, e.name, '#D9B8FF', 15); });
+        t += 0.55;
+      }
     }
     if (defense) t += 0.6;
     for (const e of alt) {

@@ -1,4 +1,4 @@
-// 전투 규칙: 턴 시작 · 계획 비용 · 동시 공개 후 처리 (① 기동 → ② 방어 → ③ 공격 → ④ 열)
+// 전투 규칙: 턴 시작 · 계획 비용 · 단계별 공개 · 처리 (시스템 → 선제 → 기동 → 방어 → 공격 → 열)
 'use strict';
 
 const R = () => DATA.rules;
@@ -38,7 +38,7 @@ function makeShip(key, side, cfg) {
     regen: 0,            // 이번 턴 방어 단계에 더해질 재생 보호막
     coolTurns: 0, coolAmt: 0,   // 냉각 상태 (냉각 촉매)
     dmgReduce: 0,        // 이번 턴 받는 피해 감소 (물러나기)
-    usedSystem: [],      // 이번 턴 쓴 시스템 카드 (동시 공개 때 먼저 보여줌)
+    pd: false,           // 이번 턴 점방어 가동
   };
 }
 
@@ -76,9 +76,14 @@ function planSummary(s, plan) {
   const left = Math.max(0, s.fuel - cost);           // 남은 연료 (냉각 · 이월)
   const cool = Math.min(plan.cool, left);
   const heatIn = plan.items.reduce((t, it) => t + itemHeat(it), 0) + Math.abs(eng) * R().engineHeatPerStep + (od ? R().overdriveHeat : 0);
+  // 시스템 카드 (공개 때 가장 먼저): 강제 배기 = 곧바로 열 − · 냉각 촉매 = 이번 턴부터
+  const sys = plan.items.map((it) => DATA.cards[it.id]).filter((c) => c.type === 'system');
+  const heatNow = sys.reduce((t, c) => t + (c.heatNow || 0), 0);
+  const newCool = sys.find((c) => c.coolStatus);
+  const coolAmt = newCool ? newCool.coolStatus.amount : s.coolTurns > 0 ? s.coolAmt : 0;
   // 멜트다운 턴: 얼마나 움직였든 턴이 끝나면 열 40
   const heatAfter = s.skip ? R().meltdownResetHeat
-    : Math.max(0, s.heat + heatIn - s.cooling - cool * R().coolPerFuel - (s.coolTurns > 0 ? s.coolAmt : 0));
+    : Math.max(0, Math.max(0, s.heat + heatNow) + heatIn - s.cooling - cool * R().coolPerFuel - coolAmt);
   const move = plan.items.reduce((t, it) => t + itemMove(it), 0) + eng;
   const ok = cost <= cap && (!od || s.odCooldown === 0) && Math.abs(eng) <= R().engineMaxSteps;
   return { cost, cap, short, left, cool, heatIn, heatAfter, move, od, ok };
@@ -96,7 +101,7 @@ function startTurn(B) {
     s.shield = 0;
     s.overkill = 0;
     s.locked = -1;
-    s.usedSystem = [];
+    s.pd = false;
     s.dmgReduce = 0;
     // 초고열 응집 충전 중: 매 턴 최대 연료 −1 · 열 +5
     for (const ch of s.charges) { s.fuel -= ch.fuel; s.heat += ch.heat; }
@@ -121,23 +126,6 @@ function newBattle(enemyKey, playerCfg) {
   };
   startTurn(B);
   return B;
-}
-
-// 시스템 카드 즉시 사용 (계획 중). 성공하면 true
-function useSystem(B, s, handIdx) {
-  const id = s.hand[handIdx], c = DATA.cards[id];
-  if (!c || c.type !== 'system' || s.skip || handIdx === s.locked || s.fuel < c.cost) return false;
-  s.fuel -= c.cost;
-  s.heat = Math.max(0, s.heat + (c.heat || 0) + (c.heatNow || 0));
-  if (c.coolStatus) { s.coolTurns = c.coolStatus.turns; s.coolAmt = c.coolStatus.amount; }
-  s.hand.splice(handIdx, 1);
-  s.discard.push(id);
-  // 뒤에 있던 손패 번호 당기기
-  if (s.plan) for (const it of s.plan.items) if (it.hand > handIdx) it.hand--;
-  if (s.locked > handIdx) s.locked--;
-  s.usedSystem.push(id);
-  B.log.push({ t: 'def', text: `${s.side === 'player' ? '나' : '적'} ${c.name} 발동` });
-  return true;
 }
 
 // 피해 주기: 피해 감소(물러나기) 먼저 → 보호막. opt.ignoreShield: 관통 피해 (보호막 무시, 피해 감소는 적용)
@@ -167,7 +155,11 @@ function efficiency(card, d) {
   return max ? dmgAt(card, d) / max : 0;
 }
 
-// ── 처리: 단계별로 나눠서 (화면이 한 단계씩 보여줌) ──
+// ── 처리: 단계별 공개 · 처리 (화면이 한 단계씩 공개하고 보여줌) ──
+// 순서: 시스템 → 선제 → 기동 → 방어 → 공격 → 열   (기획서 v0.8 15번. 특수능력 · 전장은 아직 없음)
+// 각 단계: reveal(s) = 그 단계에 공개할 계획 항목 (양쪽 다 없으면 공개 생략), run() = 처리
+const isPre = (c) => !!c.preempt && (c.type === 'weapon' || c.type === 'defense');   // 선제: 무기 · 방어에만
+
 function resolveSteps(B) {
   const P = B.player, E = B.enemy;
   const ships = [P, E];
@@ -175,14 +167,97 @@ function resolveSteps(B) {
   // 멜트다운 턴: 기본 엔진(이동)만
   const plans = new Map(ships.map((s) => [s, s.skip ? { items: [], cool: 0, engine: s.plan.engine || 0, od: false } : s.plan]));
   const sums = new Map(ships.map((s) => [s, planSummary(s, plans.get(s))]));
-  const cardsOf = (s) => plans.get(s).items.map((it) => DATA.cards[it.id]);
+  const itemsOf = (s, f) => plans.get(s).items.filter((it) => f(DATA.cards[it.id]));
+  const cardsOf = (s, f) => itemsOf(s, f).map((it) => DATA.cards[it.id]);
   const side = (s) => s.side;
+  const who = (s) => (s === P ? '나' : '적');
   // 연출용 이벤트: 각 단계가 끝나면 화면이 이것을 보고 애니메이션을 그림
   const ev = (e) => B.events.push(e);
 
+  // 전투 끝: 선체가 0이 되면 그 단계에서 끝 (같은 순간 둘 다 0이면 무승부)
+  const over = () => {
+    if (P.hull > 0 && E.hull > 0) return false;
+    if (P.hull <= 0 && E.hull <= 0) { B.winner = 'draw'; B.log.push({ t: 'info', text: '동시 격침 — 둘 다 가라앉았다' }); }
+    else { B.winner = P.hull <= 0 ? 'enemy' : 'player'; B.log.push({ t: 'info', text: `${B.winner === 'player' ? '적함' : '나침반'} 격침 — 전투 끝` }); }
+    B.phase = 'over';
+    return true;
+  };
+
+  // 방어 카드 켜기 (선제 단계 · 방어 단계 공통). 보호막은 더해짐 (턴 끝까지 유지)
+  const defend = (s, cards, withRegen) => {
+    const mult = s.heat >= R().warnHeat ? R().warnShieldMult : 1;
+    const add = Math.round((cards.reduce((t, c) => t + (c.shield || 0), 0) + (withRegen ? s.regen || 0 : 0)) * mult);
+    s.shield += add;
+    const red = Math.max(0, ...cards.map((c) => c.dmgReduce || 0));
+    if (red > s.dmgReduce) {
+      s.dmgReduce = red;
+      ev({ kind: 'evade', who: side(s), pct: Math.round(red * 100) });
+      B.log.push({ t: 'def', text: `${who(s)} 물러나기 — 받는 피해 −${Math.round(red * 100)}%` });
+    }
+    const pd = cards.some((c) => c.pointDefense);
+    if (pd) { s.pd = true; B.log.push({ t: 'def', text: `${who(s)} 점방어 가동` }); }
+    if (add || pd) ev({ kind: 'shield', who: side(s), amount: s.shield, pd: s.pd, weak: mult < 1 });
+    if (add) B.log.push({ t: 'def', text: `${who(s)} 보호막 +${add}` + (mult < 1 ? ' (과열 경고로 약화)' : '') });
+  };
+
+  // 무기 한 발 (선제 단계 · 공격 단계 공통). d = 명중 판정 거리
+  const fire = (s, it, d) => () => {
+    const c = DATA.cards[it.id];
+    if (c.charge) {
+      s.charges.push({ left: c.charge.turns, dmg: c.charge.dmg, heat: c.charge.heat, fuel: c.charge.fuel, enemyHeat: c.charge.enemyHeat || 0 });
+      B.log.push({ t: 'info', text: `${who(s)} ${c.name} 시작 — ${c.charge.turns}턴 뒤 ${c.charge.dmg}` });
+      ev({ kind: 'chargeStart', from: side(s), turns: c.charge.turns });
+      return;
+    }
+    if (c.torpedo) {
+      B.torpedoes.push({ owner: s, overdrive: sums.get(s).od });
+      B.log.push({ t: 'info', text: `${who(s)} 어뢰 발사 — 다음 턴 도착` });
+      ev({ kind: 'torpLaunch', from: side(s) });
+      return;
+    }
+    const dmg = weaponDmg(c, d, sums.get(s).od);
+    const e = { kind: 'shot', from: side(s), card: it.id, dmg, eff: efficiency(c, d), shield: 0, hull: 0 };
+    if (dmg) Object.assign(e, hit(B, other(s), dmg, `${isPre(c) ? '선제 ' : ''}${c.name} ${d}km`, { ignoreShield: !!c.ignoreShield }));
+    else B.log.push({ t: 'miss', text: `${s === P ? '내' : '적'} ${c.name} 사거리 밖 (${d}km)` });
+    if (c.selfDamage && dmg) e.self = hit(B, s, c.selfDamage, `${c.name} 반동`);
+    if (c.jam && dmg) {                     // 교란: 명중하면 세기만큼 (쌓임)
+      other(s).jam += c.jam;
+      B.log.push({ t: 'info', text: `${who(other(s))} 교란 ${other(s).jam} — 다음 턴 손패 1장 잠김` });
+    }
+    ev(e);
+  };
+
+  // '일제 사격' 단위로: (내 1발째 + 적 1발째) → (내 2발째 + 적 2발째) …
+  //   같은 일제 사격 안의 두 발은 동시에 맞는다. 일제 사격이 끝날 때마다 확인:
+  //   한쪽만 0 이하 → 그 순간 전투 끝 (뒤따르는 사격 없음) · 둘 다 0 이하 → 무승부 (둘 다 격침).
+  const volleys = (first, f, d) => {
+    const mine = itemsOf(P, f).map((it) => fire(P, it, d)), theirs = itemsOf(E, f).map((it) => fire(E, it, d));
+    const list = first.length ? [first] : [];
+    for (let i = 0; i < Math.max(mine.length, theirs.length); i++) list.push([mine[i], theirs[i]].filter(Boolean));
+    for (const v of list) {
+      for (const g of v) g();
+      if (over()) return;
+    }
+  };
+
+  const reveal = (f) => (s) => itemsOf(s, f);
   return [
-    // ① 기동
-    { name: '기동', run() {
+    // ① 시스템 — 가장 먼저 처리되어 이번 턴의 규칙을 바꿈
+    { name: '시스템', reveal: reveal((c) => c.type === 'system'), run() {
+      for (const s of ships) for (const c of cardsOf(s, (c) => c.type === 'system')) {
+        if (c.heatNow) s.heat = Math.max(0, s.heat + c.heatNow);
+        if (c.coolStatus) { s.coolTurns = c.coolStatus.turns; s.coolAmt = c.coolStatus.amount; }
+        ev({ kind: 'system', who: side(s), name: c.name });
+        B.log.push({ t: 'def', text: `${who(s)} ${c.name} 발동` });
+      }
+    } },
+    // ② 선제 — 기동 전에: 선제 방어 먼저, 그다음 선제 공격 (기동 전의 거리로 판정)
+    { name: '선제', reveal: reveal(isPre), run() {
+      for (const s of ships) { const cs = cardsOf(s, (c) => isPre(c) && c.type === 'defense'); if (cs.length) defend(s, cs, false); }
+      volleys([], (c) => isPre(c) && c.type === 'weapon', B.distance);
+    } },
+    // ③ 기동
+    { name: '기동', reveal: reveal((c) => c.type === 'move'), engine: (s) => plans.get(s).engine || 0, run() {
       const pm = sums.get(P).move, em = sums.get(E).move;
       const before = B.distance;
       B.distance = clamp(B.distance - (pm + em) * R().step, 0, R().maxDistance);
@@ -190,31 +265,21 @@ function resolveSteps(B) {
       for (const [s, m] of [[P, pm], [E, em]]) { s.moveHist.push(m); if (s.moveHist.length > 4) s.moveHist.shift(); }
       ev({ kind: 'move', pm, em, before, after: B.distance });
       const desc = (m) => (m > 0 ? `${m * 100}km 전진` : m < 0 ? `${-m * 100}km 후진` : '정지');
-      B.log.push({ t: 'move', text: `이동: 나 ${desc(pm)} · 적 ${desc(em)} → ${before}km → ${B.distance}km` });
+      B.log.push({ t: 'move', text: `기동: 나 ${desc(pm)} · 적 ${desc(em)} → ${before}km → ${B.distance}km` });
     } },
-    // ② 방어
-    { name: '방어', run() {
+    // ④ 방어
+    { name: '방어', reveal: reveal((c) => c.type === 'defense' && !isPre(c)), run() {
       for (const s of ships) {
-        const mult = s.heat >= R().warnHeat ? R().warnShieldMult : 1;
-        s.shield = Math.round((cardsOf(s).reduce((t, c) => t + (c.shield || 0), 0) + (s.regen || 0)) * mult);
-        s.regen = cardsOf(s).reduce((t, c) => t + (c.shieldNext || 0), 0);        // 다음 턴 재생분
-        s.dmgReduce = Math.max(0, ...cardsOf(s).map((c) => c.dmgReduce || 0));
-        if (s.dmgReduce) { ev({ kind: 'evade', who: side(s), pct: Math.round(s.dmgReduce * 100) }); B.log.push({ t: 'def', text: `${s === P ? '나' : '적'} 물러나기 — 받는 피해 −${Math.round(s.dmgReduce * 100)}%` }); }
-        s.pd = cardsOf(s).some((c) => c.pointDefense);
-        if (s.shield || s.pd) ev({ kind: 'shield', who: side(s), amount: s.shield, pd: s.pd, weak: mult < 1 });
-        if (s.shield) B.log.push({ t: 'def', text: `${s === P ? '나' : '적'} 보호막 ${s.shield}` + (mult < 1 ? ' (과열 경고로 약화)' : '') });
-        if (s.pd) B.log.push({ t: 'def', text: `${s === P ? '나' : '적'} 점방어 가동` });
+        defend(s, cardsOf(s, (c) => c.type === 'defense' && !isPre(c)), true);
+        s.regen = cardsOf(s, (c) => c.type === 'defense').reduce((t, c) => t + (c.shieldNext || 0), 0);   // 다음 턴 재생분
       }
     } },
-    // ③ 공격 — '일제 사격' 단위로: 도착하는 어뢰(양쪽 동시) → (내 1발째 + 적 1발째) → (내 2발째 + 적 2발째) …
-    //   같은 일제 사격 안의 두 발은 동시에 맞는다. 일제 사격이 끝날 때마다 확인:
-    //   한쪽만 0 이하 → 그 순간 전투 끝 (뒤따르는 사격 없음) · 둘 다 0 이하 → 무승부 (둘 다 격침).
-    { name: '공격', run() {
+    // ⑤ 공격 — 도착하는 어뢰 · 충전 끝난 초고열 응집(일제 사격 0) → 무기
+    { name: '공격', reveal: reveal((c) => c.type === 'weapon' && !isPre(c)), od: (s) => sums.get(s).od, run() {
       const d = B.distance;
       const arriving = B.torpedoes;
       B.torpedoes = [];
       const acts = [];
-      // 초고열 응집: 충전이 끝난 것은 이번 공격 단계 맨 처음(도착 어뢰와 같은 일제 사격)에 발사
       for (const s of ships) {
         for (const ch of s.charges) {
           ch.left--;
@@ -223,7 +288,7 @@ function resolveSteps(B) {
             ev(Object.assign({ kind: 'shot', from: side(s), card: 'solarLance', dmg: ch.dmg, eff: 1, shield: 0, hull: 0 }, hit(B, other(s), ch.dmg, '초고열 응집')));
             if (ch.enemyHeat) {
               other(s).heat += ch.enemyHeat;
-              B.log.push({ t: 'heat', text: `${other(s) === P ? '나' : '적'} 열 +${ch.enemyHeat} (초고열 응집)` });
+              B.log.push({ t: 'heat', text: `${who(other(s))} 열 +${ch.enemyHeat} (초고열 응집)` });
             }
           });
         }
@@ -231,9 +296,9 @@ function resolveSteps(B) {
       }
       for (const t of arriving) {
         acts.push(() => {
-          const target = t.owner === P ? E : P;
+          const target = other(t.owner);
           if (target.pd) {
-            B.log.push({ t: 'def', text: `어뢰 격추 (${target === P ? '나' : '적'}의 점방어)` });
+            B.log.push({ t: 'def', text: `어뢰 격추 (${who(target)}의 점방어)` });
             ev({ kind: 'torpArrive', from: side(t.owner), intercepted: true });
             return;
           }
@@ -243,52 +308,9 @@ function resolveSteps(B) {
           else { B.log.push({ t: 'miss', text: `어뢰 빗나감 (${d}km — 500~900km 밖)` }); ev({ kind: 'torpArrive', from: side(t.owner), dmg: 0, eff: 0 }); }
         });
       }
-      const shotsOf = (s) => plans.get(s).items.filter((it) => DATA.cards[it.id].type === 'weapon').map((it) => () => {
-        const c = DATA.cards[it.id];
-        if (c.charge) {
-          s.charges.push({ left: c.charge.turns, dmg: c.charge.dmg, heat: c.charge.heat, fuel: c.charge.fuel, enemyHeat: c.charge.enemyHeat || 0 });
-          B.log.push({ t: 'info', text: `${s === P ? '나' : '적'} 초고열 응집 시작 — ${c.charge.turns}턴 뒤 ${c.charge.dmg}` });
-          ev({ kind: 'chargeStart', from: side(s), turns: c.charge.turns });
-          return;
-        }
-        if (c.torpedo) {
-          B.torpedoes.push({ owner: s, overdrive: sums.get(s).od });
-          B.log.push({ t: 'info', text: `${s === P ? '나' : '적'} 어뢰 발사 — 다음 턴 도착` });
-          ev({ kind: 'torpLaunch', from: side(s) });
-          return;
-        }
-        const dmg = weaponDmg(c, d, sums.get(s).od);
-        const e = { kind: 'shot', from: side(s), card: it.id, dmg, eff: efficiency(c, d), shield: 0, hull: 0 };
-        if (dmg) Object.assign(e, hit(B, other(s), dmg, `${c.name} ${d}km`, { ignoreShield: !!c.ignoreShield }));
-        else B.log.push({ t: 'miss', text: `${s === P ? '내' : '적'} ${c.name} 사거리 밖 (${d}km)` });
-        if (c.selfDamage && dmg) e.self = hit(B, s, c.selfDamage, `${c.name} 반동`);
-        if (c.jam && dmg) {                     // 교란: 명중하면 세기만큼 (쌓임)
-          other(s).jam += c.jam;
-          B.log.push({ t: 'info', text: `${other(s) === P ? '나' : '적'} 교란 ${other(s).jam} — 다음 턴 손패 1장 잠김` });
-        }
-        ev(e);
-      });
-      const mine = shotsOf(P), theirs = shotsOf(E);
-      const volleys = [acts];                                   // 일제 사격 0: 도착하는 어뢰
-      for (let i = 0; i < Math.max(mine.length, theirs.length); i++) volleys.push([mine[i], theirs[i]].filter(Boolean));
-      for (const v of volleys) {
-        for (const f of v) f();
-        if (P.hull <= 0 || E.hull <= 0) return this.finish(P.hull <= 0 && E.hull <= 0);
-      }
-    },
-    // 전투 끝 처리
-    finish(both) {
-      if (both) {
-        // 둘 다 격침 → 무승부
-        B.winner = 'draw';
-        B.log.push({ t: 'info', text: '동시 격침 — 둘 다 가라앉았다' });
-      } else {
-        B.winner = P.hull <= 0 ? 'enemy' : 'player';
-        B.log.push({ t: 'info', text: `${B.winner === 'player' ? '적함' : '나침반'} 격침 — 전투 끝` });
-      }
-      B.phase = 'over';
+      volleys(acts, (c) => c.type === 'weapon' && !isPre(c), d);
     } },
-    // ④ 냉각 · 과열
+    // ⑥ 냉각 · 과열
     { name: '열', run() {
       for (const s of ships) {
         const sum = sums.get(s);
@@ -299,7 +321,7 @@ function resolveSteps(B) {
         ev({ kind: 'heat', who: side(s), heat: s.heat, overdrive: sum.od });
         if (sum.od) {
           s.odCooldown = R().overdriveCooldown + 1;   // 다음 턴 시작에 1 줄어 4턴 충전
-          B.log.push({ t: 'heat', text: `${s === P ? '나' : '적'} 오버드라이브! 열 +${R().overdriveHeat} · ${R().overdriveCooldown}턴 충전` });
+          B.log.push({ t: 'heat', text: `${who(s)} 오버드라이브! 열 +${R().overdriveHeat} · ${R().overdriveCooldown}턴 충전` });
         }
         s.skip = false;
         if (meltTurn) s.heat = R().meltdownResetHeat;   // 멜트다운 턴: 얼마나 움직였든 열 40
@@ -309,17 +331,10 @@ function resolveSteps(B) {
           s.heat = R().meltdownResetHeat;
           s.skip = true;
           ev({ kind: 'meltdown', who: side(s) });
-          B.log.push({ t: 'hurt', text: `${s === P ? '나' : '적'} 멜트다운! 선체 −${R().meltdownDamage}, 다음 턴은 기본 엔진(이동)만` });
+          B.log.push({ t: 'hurt', text: `${who(s)} 멜트다운! 선체 −${R().meltdownDamage}, 다음 턴은 기본 엔진(이동)만` });
         }
       }
-      if (P.hull <= 0 || E.hull <= 0) {
-        if (P.hull <= 0 && E.hull <= 0) {
-          // 둘 다 격침 → 무승부
-          B.winner = 'draw';
-          B.log.push({ t: 'info', text: '동시 격침 — 둘 다 가라앉았다' });
-        } else B.winner = P.hull <= 0 ? 'enemy' : 'player';
-        B.phase = 'over';
-      }
+      over();
     } },
   ];
 }
