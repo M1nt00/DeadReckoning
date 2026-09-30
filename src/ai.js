@@ -4,6 +4,7 @@
 
 function aiPlan(B) {
   const E = B.enemy, P = B.player;
+  if (E.dummy) return { items: [], cool: 0, engine: 0, od: false };   // 시험장 표적 더미: 아무것도 안 함
   // 플레이어 이동 예측: 지난 턴 이동을 반쯤 믿는다 (사람은 같은 행동을 반복하는 경향)
   const predMove = Math.random() < 0.5 ? P.lastMove : 0;
   // 지원 카드 (드로우): 연료가 넉넉하면 먼저 써서 손패를 늘림 — 상대에게 안 보임

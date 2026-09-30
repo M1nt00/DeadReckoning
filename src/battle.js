@@ -24,7 +24,7 @@ function makeShip(key, side, cfg) {
     key, side, name: s.name, prefer: s.prefer || 1000, doctrine: s.doctrine, doctrineDesc: s.doctrineDesc,
     preferBase: s.prefer || 1000, preferJitter: s.preferJitter || 0,   // 흔들림 폭 (0이면 고정)
     moveHist: [],        // 최근 기동 (화면에 공개)
-    hull: s.hull, maxHull: s.maxHull || s.hull, reactor: s.reactor, cooling: s.cooling, flagship: !!s.flagship, elite: !!s.elite,
+    hull: s.hull, maxHull: s.maxHull || s.hull, reactor: s.reactor, cooling: s.cooling, flagship: !!s.flagship, elite: !!s.elite, dummy: !!s.dummy,
     shield: 0, heat: 0, fuel: 0, carry: 0, overkill: 0,
     draw: shuffle((s.deck || DATA.starterDeck).slice()), hand: [], discard: [],
     locked: -1,          // 교란으로 잠긴 손패 번호

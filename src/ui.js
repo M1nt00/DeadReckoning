@@ -953,8 +953,8 @@ function start(enemyKey = 'vex', playerCfg = null) {
 
 
 // ── 시험장: 원하는 덱 · 적 · 상황으로 바로 시험 ─────────
-const SB = { deck: {}, enemy: 'vex', dist: 1200, godP: true, godE: false };
-const sbShips = () => [['player', '나침반 (내 덱)']].concat(Object.entries(DATA.ships).filter(([k]) => k !== 'player').map(([k, s]) => [k, s.name]));
+const SB = { deck: {}, enemy: 'vex', dist: 1200, godP: true, godE: false, ready: false };
+const sbShips = () => [['player', '나침반 (내 덱)']].concat(Object.entries(DATA.ships).filter(([k, s]) => k !== 'player' && !s.dummy).map(([k, s]) => [k, s.name]));
 const sbOrder = ['weapon', 'defense', 'move', 'system', 'field', 'support'];
 const sbIds = () => Object.keys(DATA.cards).sort((a, b) => sbOrder.indexOf(DATA.cards[a].type) - sbOrder.indexOf(DATA.cards[b].type) || DATA.cards[a].name.localeCompare(DATA.cards[b].name, 'ko'));
 function sbPreset(k) {
@@ -982,7 +982,7 @@ function sbSetupHTML() {
   </div>`;
 }
 function showSandboxSetup() {
-  if (!Object.keys(SB.deck).length) sbPreset('player');
+  if (!SB.ready) { sbPreset('player'); SB.ready = true; }   // 처음 한 번만 내 기본 덱으로 (비우기는 그대로 비움)
   $('overlay').innerHTML = sbSetupHTML();
   $('overlay').classList.remove('hidden');
 }

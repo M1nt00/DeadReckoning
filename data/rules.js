@@ -43,6 +43,11 @@ DATA.ships = {
     name: '호위함 「나침반」', hull: 120, reactor: 5, cooling: 10,
     deck: null,            // null이면 DATA.starterDeck
   },
+  // 시험장 전용: 아무것도 하지 않는 표적 (카드 · 이동 · 냉각 없음)
+  dummy: {
+    name: '표적 더미', hull: 300, reactor: 0, cooling: 10, prefer: 1000, dummy: true,
+    deck: [],
+  },
   // 첫 적: 중거리 구축함. prefer = 선호 거리 (화면에 공개됨 → 플레이어가 읽을 단서)
   vex: {
     name: '순찰 구축함 VEX-7', hull: 110, reactor: 5, cooling: 10, prefer: 800,
