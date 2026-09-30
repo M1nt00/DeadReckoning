@@ -6,6 +6,11 @@ function aiPlan(B) {
   const E = B.enemy, P = B.player;
   // 플레이어 이동 예측: 지난 턴 이동을 반쯤 믿는다 (사람은 같은 행동을 반복하는 경향)
   const predMove = Math.random() < 0.5 ? P.lastMove : 0;
+  // 지원 카드 (드로우): 연료가 넉넉하면 먼저 써서 손패를 늘림 — 상대에게 안 보임
+  for (let i = E.hand.length - 1; i >= 0; i--) {
+    const c = DATA.cards[E.hand[i]];
+    if (c.type === 'support' && i !== E.locked && E.fuel >= c.cost + 3) useSupport(B, E, i);
+  }
   // 플레이어가 이번 턴 쏠 수 있는 대략의 피해 (연료는 서로 안 보이므로 원자로 기준)
   const expectedIncoming = Math.min(30, P.reactor * 5);
   const R = DATA.rules;
@@ -28,11 +33,13 @@ function aiPlan(B) {
     const c = DATA.cards[id];
     if (c.type !== 'system' || i === E.locked) return;
     const room = E.fuel - sysCost >= c.cost + 2;
-    const want = c.heatNow ? E.heat >= 55 : c.coolStatus ? E.coolTurns === 0 && E.heat >= 35 && !sysItems.some((x) => DATA.cards[x.id].coolStatus) : false;
+    const want = c.heatNow ? E.heat >= 55
+      : c.selfStatus && c.selfStatus.cool ? statusOf(E, 'cool') === 0 && E.heat >= 35 && !sysItems.some((x) => DATA.cards[x.id].selfStatus)
+      : c.extend ? statusOf(E, 'cool') > 0 || statusOf(P, 'jam') > 0 : false;
     if (want && room) { sysItems.push({ hand: i, id, steps: 0 }); sysCost += c.cost; }
   });
   // 물러나기는 400km 이내에서만
-  const hand = E.hand.map((id, i) => ({ id, i })).filter((h) => h.i !== E.locked && DATA.cards[h.id].type !== 'system'
+  const hand = E.hand.map((id, i) => ({ id, i })).filter((h) => h.i !== E.locked && DATA.cards[h.id].type !== 'system' && DATA.cards[h.id].type !== 'support'
     && !(DATA.cards[h.id].maxRange !== undefined && B.distance > DATA.cards[h.id].maxRange));
   const cardsNoMove = hand.filter((h) => DATA.cards[h.id].type !== 'move');
   const moveCards = hand.filter((h) => DATA.cards[h.id].type === 'move');
@@ -68,9 +75,10 @@ function aiPlan(B) {
       for (const it of items) {
         const c = DATA.cards[it.id];
         if (c.type === 'weapon') wdmg += c.torpedo ? weaponDmg(c, clamp(d - predMove * 100, 0, 2000), od) * 0.7
-          : weaponDmg(c, isPre(c) ? B.distance : d, od);                  // 선제: 기동 전 거리로 판정
+          : weaponDmg(c, isPre(c) ? B.distance : d, od, isPre(c) ? 0 : predMove);   // 선제: 기동 전 거리 · 추적 무기: 예상 이동
         if (c.charge) wdmg += c.charge.dmg * 0.45;                       // 초고열 응집: 늦게 오는 큰 한 방
-        if (c.jam && weaponDmg(c, d, od)) score += 5 * c.jam;             // 교란
+        if (c.inflict && weaponDmg(c, d, od)) score += 5 * Object.values(c.inflict).reduce((a, b) => a + b, 0);   // 상태이상
+        if (c.evade) score += expectedIncoming * c.evade * 0.4;           // 회피 기동 (반쯤 성공한다고 봄)
         if (c.shield) score += Math.min(c.shield, expectedIncoming) * 0.8;
         if (c.shieldNext) score += c.shieldNext * 0.4;                    // 재생 보호막
         if (c.dmgReduce) score += expectedIncoming * c.dmgReduce * 0.8;   // 물러나기

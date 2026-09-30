@@ -604,3 +604,14 @@ body.onVoyage #top, body.onVoyage #field, body.onVoyage #tray, body.onVoyage #lo
 .ssName { font-size: 13px; font-weight: 900; letter-spacing: 1px; text-shadow: 0 0 6px #000, 0 1px 2px #000; white-space: nowrap; }
 .shipStat.player .ssName { color: var(--me); }
 .shipStat.enemy .ssName { color: var(--foe); }
+
+/* 지원 카드 (노랑) */
+:root { --support: #FFD166; }
+.card[data-type=support] .cart { color: var(--support); background: radial-gradient(ellipse at 50% 60%, rgba(255,209,102,0.28), rgba(60,44,8,0.4) 70%); }
+.card[data-type=support] .ctype { color: var(--support); }
+.card .sysBadge.supBadge { background: var(--support); color: #1A1204; box-shadow: 0 0 10px rgba(255,209,102,0.7); }
+.dtype[data-type=support] { color: var(--support); }
+.pileItem[data-type=support] .ri { color: var(--support); }
+.card[data-type=system] .cart { color: var(--system); }
+
+.card .ctext.long { font-size: 11.5px; line-height: 1.4; }

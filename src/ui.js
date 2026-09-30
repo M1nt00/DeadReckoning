@@ -8,7 +8,7 @@ let stepName = null;     // 지금 처리 중인 단계
 const $ = (id) => document.getElementById(id);
 const pct = (d) => (d / DATA.rules.maxDistance) * 100;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const TYPE_NAME = { weapon: '무기', defense: '방어', move: '기동', system: '시스템' };
+const TYPE_NAME = { weapon: '무기', defense: '방어', move: '기동', system: '시스템', support: '지원' };
 let skipDeal = false;   // 손패를 다시 그려도 '한 장씩 올라오기'는 생략 (시스템 카드 사용 직후)
 
 function bandOf(d) {
@@ -88,9 +88,11 @@ function statChips(s) {
   if (s.skip) chip('debuff', '☢', '', `멜트다운 — 이번 턴은 기본 엔진(이동)만. 턴이 끝나면 열 ${R.meltdownResetHeat}`);
   if (s.overheated) chip('debuff', '⚠', '', `과열 위험 — 이번 턴 최대 연료 −${R.dangerFuel}`);
   if (s.locked >= 0) chip('debuff', '⛓', '', '교란 — 이번 턴 손패 1장 잠김');
-  if (s.jam > 0) chip('debuff', '✖', s.jam, `교란 ${s.jam} — 다음 턴 손패 1장 잠김. 턴마다 1씩 줄어듦`);
+  for (const [k, def] of Object.entries(DATA.status)) {
+    const n = statusOf(s, k);
+    if (n > 0) chip(def.kind, def.icon, n, `${def.kind === 'buff' ? '버프' : '디버프'} ${def.name} ${n} — ${def.desc}. 턴마다 1씩 줄어듦`);
+  }
   for (const ch of s.charges) chip('info', '☀', ch.left, `초고열 응집 충전 — ${ch.left}턴 뒤 피해 ${ch.dmg}${ch.enemyHeat ? ` · 상대 열 +${ch.enemyHeat}` : ''}. 충전 중 매 턴 열 +${ch.heat} · 최대 연료 −${ch.fuel}`);
-  if (s.coolTurns > 0) chip('buff', '❄', s.coolTurns, `냉각 — 매 턴 열 −${s.coolAmt} (${s.coolTurns}턴 남음)`);
   if (s.regen > 0) chip('buff', '⟳', '+' + s.regen, `재생 보호막 — 다음 방어 단계에 보호막 +${s.regen}`);
   return out.join('');
 }
@@ -211,7 +213,10 @@ function chipHTML(it, editable, idx) {
     body += editable
       ? ` <button data-act="steps" data-i="${idx}" data-d="-1">◀ 후진</button> <span style="min-width:74px;text-align:center">${txt}</span> <button data-act="steps" data-i="${idx}" data-d="1">전진 ▶</button>`
       : ` ${txt}`;
-  } else if (c.move) body += ` ${c.move > 0 ? c.move * 100 + 'km 전진' : -c.move * 100 + 'km 후진'}`;
+  } else if (c.move || c.inertia) {
+    const m = itemMove(it, B.player);
+    body += ` ${m > 0 ? m * 100 + 'km 전진' : m < 0 ? -m * 100 + 'km 후진' : '이동 없음'}`;
+  }
   body += ` <span style="color:var(--fuel)">${itemCost(it)}</span>`;
   if (editable) body += ` <button data-act="remove" data-i="${idx}">×</button>`;
   return `<span class="chip" data-type="${c.type}" data-chip="${it.hand}">${body}</span>`;
@@ -289,11 +294,12 @@ function renderHand() {
       <div class="cart">${iconSVG(id, 40)}</div>
       <div class="cbody">
         <div class="cname">${c.name}</div>
-        <div class="ctext">${c.text || c.desc}</div>
+        <div class="ctext ${(c.text || c.desc).length > 62 ? 'long' : ''}">${c.text || c.desc}</div>
       </div>
       <div class="cfoot"><span class="key">${i + 1}</span><button class="detailBtn" data-hand="${i}">자세히</button></div>
       ${locked ? '<div class="lockNote">교란으로 잠김</div>' : far ? `<div class="lockNote">${c.maxRange}km 이내에서만</div>` : ''}
       ${c.type === 'system' ? '<div class="sysBadge">가장 먼저</div>' : ''}
+      ${c.type === 'support' ? '<div class="sysBadge supBadge">즉시 · 비공개</div>' : ''}
       ${c.preempt ? '<div class="preBadge">선제</div>' : ''}
     </div>`;
   }).join('');
@@ -330,7 +336,14 @@ function detailHTML(c) {
   if (c.torpedo) notes.push('다음 턴에 도착해서 그때의 거리로 명중 판정. 점방어에 격추된다.');
   if (c.charge) notes.push(`${c.charge.turns}턴 동안 매 턴: 열 +${c.charge.heat} · 최대 연료 −${c.charge.fuel}`, `${c.charge.turns}턴 후: 거리 무관 피해 ${c.charge.dmg}${c.charge.enemyHeat ? ` · 상대 열 +${c.charge.enemyHeat}` : ''}`);
   if (c.ignoreShield) notes.push('관통 피해 — 보호막을 무시한다 (피해 감소는 적용).');
-  if (c.jam) notes.push(`명중하면 교란 ${c.jam} — 다음 턴 손패 1장 잠김 (쌓이고, 턴마다 1씩 줄어듦).`);
+  if (c.inflict) for (const [k, n] of Object.entries(c.inflict)) notes.push(`명중하면 상대에게 ${DATA.status[k].name} ${n} — ${DATA.status[k].desc} (보호막과 상관없이 걸림 · 쌓이고 턴마다 1씩 줄어듦).`);
+  if (c.selfStatus) for (const [k, n] of Object.entries(c.selfStatus)) notes.push(`나에게 ${DATA.status[k].name} ${n} — ${DATA.status[k].desc} (쌓이고 턴마다 1씩 줄어듦).`);
+  if (c.extend) notes.push(`걸려 있는 내 버프와 상대 디버프의 남은 턴 +${c.extend}.`);
+  if (c.trackMove) notes.push(`상대가 이번 턴 ${c.trackMove.min * 100}km 이상 움직였으면 피해 ${c.trackMove.dmg}.`);
+  if (c.evadedBy) notes.push(`상대가 이번 턴 ${c.evadedBy * 100}km 이상 움직였으면 빗나감.`);
+  if (c.evade) notes.push(`상대가 이번 턴 나와 다른 방향으로 움직였으면 받는 모든 피해 −${Math.round(c.evade * 100)}% (정지도 하나의 방향으로 침).`);
+  if (c.inertia) { const m = itemMove({ id: 'inertia' }, B.player); notes.push(`지금이라면: ${m > 0 ? m * 100 + 'km 전진' : m < 0 ? -m * 100 + 'km 후진' : '이동 없음 (지난 턴에 정지)'}`); }
+  if (c.type === 'support') notes.push('지원 카드 — 내 함선에 놓는 즉시 사용 (연료도 즉시). 상대에게 공개되지 않는다.');
   if (c.selfDamage) notes.push(`명중하면 나도 피해 ${c.selfDamage}.`);
   if (c.type === 'weapon' && !c.charge) notes.push(`오버드라이브 중이면 피해 +${Math.round(R.overdriveBonus * 100)}%.`);
   if (c.type !== 'weapon') notes.push(c.desc);
@@ -365,7 +378,7 @@ function showPile(kind) {
   closeDetail();
   const P = B.player, list = kind === 'draw' ? P.draw : P.discard, cnt = {};
   for (const id of list) cnt[id] = (cnt[id] || 0) + 1;
-  const order = ['weapon', 'defense', 'move', 'system'];
+  const order = ['weapon', 'defense', 'move', 'system', 'support'];
   const ids = Object.keys(cnt).sort((a, b) => order.indexOf(DATA.cards[a].type) - order.indexOf(DATA.cards[b].type) || DATA.cards[a].name.localeCompare(DATA.cards[b].name, 'ko'));
   $('overlay').innerHTML = `<div class="box pileBox"><h1>${kind === 'draw' ? '뽑을 더미' : '버린 더미'} <small>${list.length}장</small></h1>
     <p class="pnote">${kind === 'draw' ? '순서는 숨겨져 있다 — 무엇이 남았는지만 보인다.' : '뽑을 더미가 떨어지면 이 카드들을 섞어서 다시 뽑는다.'}</p>
@@ -462,6 +475,9 @@ function planHas(i) { return B.player.plan.items.some((it) => it.hand === i); }
 function aimInfo(id, hand) {
   const c = DATA.cards[id], P = B.player;
   if (c.type === 'system') return { text: `${c.name} · 공개 때 가장 먼저 발동`, sub: c.desc, color: '#C08BFF' };
+  if (c.type === 'support') return { text: `${c.name} · 지금 바로 사용 (상대에게 안 보임)`, sub: c.desc, color: '#FFD166' };
+  if (c.evade) return { text: `${c.name} · 상대가 다른 방향으로 움직이면 피해 −${Math.round(c.evade * 100)}%`, color: '#9DB8FF' };
+  if (c.inertia) { const m = itemMove({ id }, P); return { text: `${c.name} · ${m > 0 ? m * 100 + 'km 전진' : m < 0 ? -m * 100 + 'km 후진' : '지난 턴에 정지 — 이동 없음'}`, color: '#7CFF9B' }; }
   if (c.maxRange !== undefined && B.distance > c.maxRange) return { text: `${c.name} · ${c.maxRange}km 이내에서만 (지금 ${fmtM(B.distance)})`, color: '#FF5A5F' };
   if (c.dmgReduce) return { text: `${c.name} · 100km 후진 · 받는 피해 −${Math.round(c.dmgReduce * 100)}%`, color: '#9DB8FF' };
   if (c.type !== 'weapon') {
@@ -524,6 +540,14 @@ function endAim(d, x, y) {
   if (Scene.hitShip(x, y) === want && !planHas(d.hand)) {
     const c = DATA.cards[d.id];
     if (c.maxRange !== undefined && B.distance > c.maxRange) { hint(`${c.name}는 ${c.maxRange}km 이내에서만 쓸 수 있어요`); renderRange(); return; }
+    if (c.type === 'support') {                       // 지원: 계획에 넣지 않고 바로 사용
+      if (!useSupport(B, B.player, d.hand)) { hint(`연료가 모자라요 (${c.name}: 연료 ${c.cost})`); renderRange(); return; }
+      Scene.lockOn('player', `${c.name} 사용`, '#FFD166');
+      const P = B.player;
+      P.plan.cool = Math.min(P.plan.cool, planSummary(P, Object.assign({}, P.plan, { cool: 0 })).left);
+      render();
+      return;
+    }
     const info = want === 'enemy' ? aimInfo(d.id, d.hand) : null;   // 넣기 전에 계산
     togglePlan(d.hand);
     if (want === 'enemy') Scene.lockOn('enemy', `TARGET LOCKED · ${c.name}`, info.color);
@@ -585,7 +609,7 @@ document.addEventListener('pointerup', (e) => {
     drag = null;
     // 짧게 클릭: 넣은 카드면 빼고, 아니면 사용법 안내
     if (planHas(d.hand)) togglePlan(d.hand);
-    else hint(DATA.cards[d.id].type === 'weapon' ? '카드를 끌어서 적 함선에 조준하세요 (또는 숫자키)' : DATA.cards[d.id].type === 'system' ? '시스템 카드: 내 함선에 놓으면 공개 때 가장 먼저 발동해요 (또는 숫자키)' : '카드를 끌어서 내 함선에 놓으세요 (또는 숫자키)');
+    else hint(DATA.cards[d.id].type === 'weapon' ? '카드를 끌어서 적 함선에 조준하세요 (또는 숫자키)' : DATA.cards[d.id].type === 'system' ? '시스템 카드: 내 함선에 놓으면 공개 때 가장 먼저 발동해요 (또는 숫자키)' : DATA.cards[d.id].type === 'support' ? '지원 카드: 내 함선에 놓으면 바로 사용돼요 — 상대에게 안 보여요 (또는 숫자키)' : '카드를 끌어서 내 함선에 놓으세요 (또는 숫자키)');
     renderRange();
     return;
   }
@@ -596,6 +620,7 @@ function togglePlan(i) {
   const P = B.player;
   if (B.phase !== 'plan' || resolving || P.skip || i >= P.hand.length || i === P.locked) return;
   const tc = DATA.cards[P.hand[i]];
+  if (tc.type === 'support') { hint('지원 카드는 내 함선에 놓으면 바로 사용돼요'); return; }
   if (tc.maxRange !== undefined && B.distance > tc.maxRange && !P.plan.items.some((it) => it.hand === i)) { hint(`${tc.name}는 ${tc.maxRange}km 이내에서만 쓸 수 있어요`); return; }
   const k = P.plan.items.findIndex((it) => it.hand === i);
   if (k >= 0) P.plan.items.splice(k, 1);
@@ -708,7 +733,8 @@ function showHelp() {
       <li><b>선제</b>가 붙은 무기 · 방어 카드는 기동보다 먼저 쓰인다. 선제 무기는 <b>상대가 움직이기 전의 거리</b>로 맞히고, 선제 방어는 기동 단계부터 막는다.</li>
       <li><b>⚡ 오버드라이브</b>는 비장의 한 수 (O): 이번 턴 연료 +3 · <b>무기 피해 +50%</b> · 열 +30. 쓰고 나면 4턴 충전. 적이 언제 다시 쓸 수 있는지는 보이지 않는다 — 기억하라.</li>
       <li><b>열</b> 매 턴 냉각기가 −10. 50↑ 보호막 약화 · 80↑ 다음 턴 최대 연료 −1 · 100 멜트다운(선체 −30, 다음 턴은 기본 엔진으로 이동만 — 그 턴이 끝나면 열 40).</li>
-      <li><b>교란</b>: 다음 턴 손패 1장이 잠긴다 (군사작전). 걸릴 때마다 쌓이고, 턴마다 1씩 줄어든다.</li>
+      <li><b>버프 · 디버프</b>: 함선 아래 칸에 아이콘과 숫자로 보인다 (마우스 → 설명). 숫자 = 남은 턴. 걸릴 때마다 쌓이고, 턴마다 1씩 줄어든다. 상태이상은 보호막과 상관없이 걸린다. 교란 = 손패 1장 잠김 · 냉각 = 매 턴 열 −7.</li>
+      <li><b>지원 카드 (노란색)</b>: 내 함선에 놓는 즉시 사용되고, 상대에게 공개되지 않는다.</li>
       <li>공격은 <b>일제 사격</b> 단위: 도착 어뢰 → (내 1발째 + 적 1발째) → (내 2발째 + 적 2발째) … <b>한쪽이 0이 되는 순간 끝</b> — 남은 사격은 없다. 같은 일제 사격에서 <b>둘 다 격침</b>되면 무승부 (항해에선 패배).</li>
       <li>단축키: 1~5 카드 집기 (목표 클릭으로 확정, Esc 취소) · ←/→ 기본 엔진 (Shift = 500km) · O 오버드라이브 · Space 결정 · L 기록 · H 규칙</li>
     </ul>

@@ -28,7 +28,7 @@ function makeShip(key, side, cfg) {
     shield: 0, heat: 0, fuel: 0, carry: 0, overkill: 0,
     draw: shuffle((s.deck || DATA.starterDeck).slice()), hand: [], discard: [],
     locked: -1,          // 교란으로 잠긴 손패 번호
-    jam: 0,              // 교란 세기 (= 남은 턴). 턴 시작마다 손패 1장 잠그고 1 줄어듦
+    st: {},              // 상태 (버프 · 디버프) { 교란 jam: 세기, 냉각 cool: 세기 } — 세기 = 남은 턴
     overheated: false,   // 이번 턴 과열 위험(열 80↑)으로 최대 연료 −1
     skip: false,         // 멜트다운: 이번 턴은 기본 엔진(이동)만
     plan: null,          // { items: [{ id, steps }], cool }
@@ -36,11 +36,14 @@ function makeShip(key, side, cfg) {
     odCooldown: 0,       // 오버드라이브 충전까지 남은 턴 (0 = 준비됨)
     charges: [],         // 초고열 응집 충전 { left, dmg, heat, fuel, enemyHeat }
     regen: 0,            // 이번 턴 방어 단계에 더해질 재생 보호막
-    coolTurns: 0, coolAmt: 0,   // 냉각 상태 (냉각 촉매)
     dmgReduce: 0,        // 이번 턴 받는 피해 감소 (물러나기)
     pd: false,           // 이번 턴 점방어 가동
   };
 }
+
+// ── 상태 (버프 · 디버프) — 종류는 data/rules.js의 DATA.status ──
+function statusOf(s, key) { return s.st[key] || 0; }
+function addStatus(s, key, n) { s.st[key] = statusOf(s, key) + n; }
 
 function drawCards(s, n) {
   for (let i = 0; i < n; i++) {
@@ -60,8 +63,9 @@ function itemHeat(it) {
   const c = DATA.cards[it.id];
   return c.variable ? Math.abs(it.steps) * c.heatPerStep : c.heat;
 }
-function itemMove(it) {
+function itemMove(it, s) {
   const c = DATA.cards[it.id];
+  if (c.inertia) return s ? Math.sign(s.lastMove) * c.inertia : 0;   // 관성 항행: 지난 턴에 움직인 방향으로
   return c.variable ? it.steps : c.move || 0;
 }
 
@@ -80,12 +84,12 @@ function planSummary(s, plan) {
   // 시스템 카드 (공개 때 가장 먼저): 강제 배기 = 곧바로 열 − · 냉각 촉매 = 이번 턴부터
   const sys = plan.items.map((it) => DATA.cards[it.id]).filter((c) => c.type === 'system');
   const heatNow = sys.reduce((t, c) => t + (c.heatNow || 0), 0);
-  const newCool = sys.find((c) => c.coolStatus);
-  const coolAmt = newCool ? newCool.coolStatus.amount : s.coolTurns > 0 ? s.coolAmt : 0;
+  const coolOn = statusOf(s, 'cool') > 0 || sys.some((c) => c.selfStatus && c.selfStatus.cool);
+  const coolAmt = coolOn ? DATA.status.cool.amount : 0;
   // 멜트다운 턴: 얼마나 움직였든 턴이 끝나면 열 40
   const heatAfter = s.skip ? R().meltdownResetHeat
     : Math.max(0, Math.max(0, s.heat + heatNow) + heatIn - s.cooling - cool * R().coolPerFuel - coolAmt);
-  const move = plan.items.reduce((t, it) => t + itemMove(it), 0) + eng;
+  const move = plan.items.reduce((t, it) => t + itemMove(it, s), 0) + eng;
   const ok = cost <= cap && (!od || s.odCooldown === 0) && Math.abs(eng) <= R().engineMaxSteps;
   return { cost, cap, short, left, cool, heatIn, heatAfter, move, od, ok };
 }
@@ -113,7 +117,7 @@ function startTurn(B) {
     s.odCooldown = Math.max(0, s.odCooldown - 1);
     if (s.preferJitter) s.prefer = clamp(s.preferBase + Math.round((Math.random() * 2 - 1) * s.preferJitter / 100) * 100, 200, 1800);
     // 교란: 손패 1장 잠김, 세기 1 감소
-    if (s.jam > 0) { if (s.hand.length) s.locked = Math.floor(Math.random() * s.hand.length); s.jam--; }
+    if (statusOf(s, 'jam') > 0) { if (s.hand.length) s.locked = Math.floor(Math.random() * s.hand.length); s.st.jam--; }
     s.plan = { items: [], cool: 0, engine: 0, od: false };
   }
   B.phase = 'plan';
@@ -127,6 +131,22 @@ function newBattle(enemyKey, playerCfg) {
   };
   startTurn(B);
   return B;
+}
+
+// 지원 카드: 계획 중에 바로 사용 (연료 · 열 즉시). 상대에게 보이지 않음. 성공하면 true
+function useSupport(B, s, handIdx) {
+  const id = s.hand[handIdx], c = DATA.cards[id];
+  if (!c || c.type !== 'support' || s.skip || handIdx === s.locked || s.fuel < c.cost) return false;
+  s.fuel -= c.cost;
+  s.heat = Math.max(0, s.heat + (c.heat || 0));
+  s.hand.splice(handIdx, 1);
+  s.discard.push(id);
+  // 뒤에 있던 손패 번호 당기기
+  if (s.plan) for (const it of s.plan.items) if (it.hand > handIdx) it.hand--;
+  if (s.locked > handIdx) s.locked--;
+  if (c.draw) drawCards(s, c.draw);
+  if (s.side === 'player') B.log.push({ t: 'def', text: `나 ${c.name} 사용 (상대에게 안 보임)` });
+  return true;
 }
 
 // 피해 주기: 피해 감소(물러나기) 먼저 → 보호막. opt.ignoreShield: 관통 피해 (보호막 무시, 피해 감소는 적용)
@@ -143,9 +163,13 @@ function hit(B, target, amount, src, opt = {}) {
   return { shield: onShield, hull: toHull };
 }
 
-// 무기 피해: 거리 표 × 오버드라이브 보너스 (연료가 모자라 무리한 턴엔 +30%)
-function weaponDmg(card, d, overdrive) {
-  const base = dmgAt(card, d);
+// 무기 피해: 거리 표 × 오버드라이브 보너스
+//   targetMove = 상대가 이번 턴 움직인 칸 수 (추적 무기: 궤도 예측 사격 · 유도 미사일). 모르면 undefined → 가만히 있다고 봄
+function weaponDmg(card, d, overdrive, targetMove) {
+  let base = dmgAt(card, d);
+  const m = Math.abs(targetMove || 0);
+  if (card.trackMove && m >= card.trackMove.min) base = card.trackMove.dmg;
+  if (card.evadedBy && m >= card.evadedBy) base = 0;
   return overdrive ? Math.round(base * (1 + R().overdriveBonus)) : base;
 }
 
@@ -189,7 +213,11 @@ function resolveSteps(B) {
     const mult = s.heat >= R().warnHeat ? R().warnShieldMult : 1;
     const add = Math.round((cards.reduce((t, c) => t + (c.shield || 0), 0) + (withRegen ? s.regen || 0 : 0)) * mult);
     s.shield += add;
-    const red = Math.max(0, ...cards.map((c) => c.dmgReduce || 0));
+    // 회피 기동: 이번 턴 상대가 나와 다른 방향으로 움직였으면 (지도 기준 방향. 정지도 하나의 방향)
+    const dir = (x) => Math.sign(x.lastMove) * (x === P ? 1 : -1);
+    const dodge = cards.some((c) => c.evade) && dir(s) !== dir(other(s));
+    for (const c of cards) if (c.evade) B.log.push({ t: 'def', text: `${who(s)} ${c.name} ${dodge ? '성공' : '실패 — 같은 방향'}` });
+    const red = Math.max(0, ...cards.map((c) => Math.max(c.dmgReduce || 0, c.evade && dodge ? c.evade : 0)));
     if (red > s.dmgReduce) {
       s.dmgReduce = red;
       ev({ kind: 'evade', who: side(s), pct: Math.round(red * 100) });
@@ -216,14 +244,18 @@ function resolveSteps(B) {
       ev({ kind: 'torpLaunch', from: side(s) });
       return;
     }
-    const dmg = weaponDmg(c, d, sums.get(s).od);
+    const tm = isPre(c) ? 0 : other(s).lastMove;            // 상대가 이번 턴 움직인 만큼 (선제는 아직 안 움직임)
+    const dmg = weaponDmg(c, d, sums.get(s).od, tm);
     const e = { kind: 'shot', from: side(s), card: it.id, dmg, eff: efficiency(c, d), shield: 0, hull: 0 };
     if (dmg) Object.assign(e, hit(B, other(s), dmg, `${isPre(c) ? '선제 ' : ''}${c.name} ${d}km`, { ignoreShield: !!c.ignoreShield }));
+    else if (c.evadedBy && Math.abs(tm) >= c.evadedBy) B.log.push({ t: 'miss', text: `${s === P ? '내' : '적'} ${c.name} 빗나감 (상대가 ${Math.abs(tm) * 100}km 기동)` });
     else B.log.push({ t: 'miss', text: `${s === P ? '내' : '적'} ${c.name} 사거리 밖 (${d}km)` });
     if (c.selfDamage && dmg) e.self = hit(B, s, c.selfDamage, `${c.name} 반동`);
-    if (c.jam && dmg) {                     // 교란: 명중하면 세기만큼 (쌓임)
-      other(s).jam += c.jam;
-      B.log.push({ t: 'info', text: `${who(other(s))} 교란 ${other(s).jam} — 다음 턴 손패 1장 잠김` });
+    if (c.inflict && dmg) {                 // 상태이상: 명중하면 (보호막과 상관없이) 세기만큼 쌓임
+      for (const [k, n] of Object.entries(c.inflict)) {
+        addStatus(other(s), k, n);
+        B.log.push({ t: 'info', text: `${who(other(s))} ${DATA.status[k].name} ${statusOf(other(s), k)} (${DATA.status[k].desc})` });
+      }
     }
     ev(e);
   };
@@ -254,9 +286,16 @@ function resolveSteps(B) {
     { name: '시스템', reveal: reveal((c) => c.type === 'system'), run() {
       for (const s of ships) for (const c of cardsOf(s, (c) => c.type === 'system')) {
         if (c.heatNow) s.heat = Math.max(0, s.heat + c.heatNow);
-        if (c.coolStatus) { s.coolTurns = c.coolStatus.turns; s.coolAmt = c.coolStatus.amount; }
+        if (c.selfStatus) for (const [k, n] of Object.entries(c.selfStatus)) addStatus(s, k, n);
         ev({ kind: 'system', who: side(s), name: c.name });
         B.log.push({ t: 'def', text: `${who(s)} ${c.name} 발동` });
+      }
+      // 시간 지연: 내 버프 · 상대 디버프 연장 (걸려 있는 것만. 이번 단계에 걸린 것 포함)
+      for (const s of ships) for (const c of cardsOf(s, (c) => c.extend)) {
+        for (const [k, def] of Object.entries(DATA.status)) {
+          if (def.kind === 'buff' && statusOf(s, k) > 0) addStatus(s, k, c.extend);
+          if (def.kind === 'debuff' && statusOf(other(s), k) > 0) addStatus(other(s), k, c.extend);
+        }
       }
     } },
     // ② 선제 — 기동 전에: 선제 방어 먼저, 그다음 선제 공격 (기동 전의 거리로 판정)
@@ -325,7 +364,7 @@ function resolveSteps(B) {
         const meltTurn = s.skip;                // 이번 턴이 멜트다운 턴이었나
         s.heat = Math.max(0, s.heat + sum.heatIn - s.cooling - sum.cool * R().coolPerFuel);
         s.carry = Math.min(R().carryMax, sum.left - sum.cool);
-        if (s.coolTurns > 0) { s.heat = Math.max(0, s.heat - s.coolAmt); s.coolTurns--; }   // 냉각 촉매
+        if (statusOf(s, 'cool') > 0) { s.heat = Math.max(0, s.heat - DATA.status.cool.amount); s.st.cool--; }   // 냉각 (버프)
         ev({ kind: 'heat', who: side(s), heat: s.heat, overdrive: sum.od });
         if (sum.od) {
           s.odCooldown = R().overdriveCooldown + 1;   // 다음 턴 시작에 1 줄어 4턴 충전

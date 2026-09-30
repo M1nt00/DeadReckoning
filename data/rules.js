@@ -28,6 +28,14 @@ DATA.rules = {
   meltdownResetHeat: 40, // 멜트다운 턴이 끝나면 (얼마나 움직였든) 열 40
 };
 
+// 상태 (버프 · 디버프) — 기획서 v0.8 11번
+//   이름이 붙은 상태만 버프 · 디버프. 세기 = 남은 턴 (걸릴 때마다 더해지고, 턴마다 1씩 줄어듦)
+//   상태이상은 보호막과 상관없이 걸린다
+DATA.status = {
+  jam:  { name: '교란', kind: 'debuff', icon: '✖', desc: '턴 시작에 손패 1장 잠김' },
+  cool: { name: '냉각', kind: 'buff',   icon: '❄', amount: 7, desc: '열 단계에 열 −7' },
+};
+
 // 함선 (cooling = 매 턴 자연 냉각. 지금은 모두 10 — 함선별 차이는 나중에)
 DATA.ships = {
   player: {
