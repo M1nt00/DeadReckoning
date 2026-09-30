@@ -661,3 +661,38 @@ body.resolving #skipHint { opacity: 1; }
   100% { transform: none; opacity: 1; }
 }
 .flyCard.toPile.go { transform: translate(-50%, -50%) scale(0.3) rotate(10deg); opacity: 0.3; }
+
+/* ── 시험장 ── */
+.sbBox { width: min(1000px, 94vw); max-height: 90vh; overflow-y: auto; text-align: left; }
+.sbBox h1 small { font-size: 13px; color: var(--dim); margin-left: 8px; font-weight: 400; }
+.sbBox .sbRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; font-size: 13px; }
+.sbBox .sbRow button, .sbCard button, #sbPanel button { background: rgba(255,255,255,0.06); border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px; font-size: 12px; }
+.sbBox select, #sbPanel select { background: #0C1320; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; font: inherit; font-size: 12px; }
+.sbBox .sbGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
+.sbCard { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: rgba(18,27,43,0.8); border: 1px solid var(--line); border-radius: 6px; opacity: 0.6; }
+.sbCard.on { opacity: 1; border-color: rgba(255,181,71,0.6); }
+.sbCard .ri { line-height: 0; }
+.sbCard .nm { flex: 1; font-size: 13px; }
+.sbCard b { min-width: 16px; text-align: center; font-family: var(--mono); }
+.sbCard[data-type=weapon] .ri { color: var(--weapon); } .sbCard[data-type=defense] .ri { color: var(--defense); } .sbCard[data-type=move] .ri { color: var(--move); }
+.sbCard[data-type=system] .ri { color: var(--system); } .sbCard[data-type=field] .ri { color: var(--field); } .sbCard[data-type=support] .ri { color: var(--support); }
+.sbBox .sbGo { background: var(--amber) !important; color: #1A1204; font-weight: 900; padding: 8px 22px !important; font-size: 14px !important; }
+.sbBox .sbGo:disabled { opacity: 0.4; }
+#sbBtn { color: #FFD166; border-color: rgba(255,209,102,0.5); }
+#sbPanel { position: fixed; right: 12px; top: 44px; width: 330px; z-index: 6; background: rgba(6,10,20,0.94); border: 1px solid rgba(255,209,102,0.45); border-radius: 8px; padding: 10px 12px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+#sbPanel .sbHead { display: flex; justify-content: space-between; align-items: center; color: #FFD166; font-size: 13px; }
+#sbPanel .sbLine { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+#sbPanel .sbLine > span { min-width: 76px; color: var(--dim); }
+#sbPanel .sbLine > span b { color: var(--text); }
+#sbPanel button.on { background: #FFD166; color: #1A1204; border-color: #FFD166; }
+#sbPanel .sbNote { color: var(--dim); font-size: 11px; }
+
+/* 시험장 버튼 글자 잘 보이게 */
+.sbBox { max-width: none !important; }
+.sbBox .sbRow button, .sbCard button { color: var(--text) !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.25) !important; font-weight: 700; box-shadow: none !important; }
+.sbBox .sbRow button:hover, .sbCard button:hover { border-color: var(--amber) !important; color: var(--amber) !important; }
+.sbCard button { width: 26px; height: 24px; padding: 0 !important; font-size: 15px !important; }
+.sbBox .sbGo { background: var(--amber) !important; color: #1A1204 !important; }
+.sbBox .ghostBtn { color: var(--text) !important; }
+.sbBox .sbRow button.sbGo { background: var(--amber) !important; color: #1A1204 !important; border-color: var(--amber) !important; padding: 8px 24px !important; font-size: 14px !important; }
+.sbBox .sbRow button.sbGo:disabled { opacity: 0.4; }

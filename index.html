@@ -13,6 +13,7 @@
     <header id="top">
       <div class="logo">DEAD RECKONING <span>100km의 심리전</span></div>
       <div id="turnInfo"></div>
+      <button id="sbBtn" class="topBtn hidden">🧪 시험 도구</button>
       <button id="menuBtn" class="topBtn">메인 화면</button>
       <button id="logBtn" class="topBtn">기록 (L)</button>
       <button id="helpBtn" class="topBtn">규칙 (H)</button>
@@ -58,11 +59,15 @@
           <button data-m="rules"><i>03</i>규칙</button>
           <button data-m="codex"><i>04</i>카드 도감<small>모든 카드 · 효과 · 어느 덱에 있나</small></button>
           <button data-m="voyage" disabled><i>05</i>스토리 항해<small>준비 중</small></button>
+          <button data-m="sandbox" class="dev"><i>T</i>시험장<small>원하는 덱 · 적 · 상황으로 시험</small></button>
           <button data-m="depth10" class="dev"><i>T</i>깊이 10부터<small>테스트 · 앞 구역을 깬 상태로</small></button>
         </nav>
       </div>
       <div class="tFoot">v0.4 · 마우스 또는 ↑ ↓ · Enter</div>
     </section>
+
+    <!-- 시험장: 전투 중 도구 -->
+    <aside id="sbPanel" class="hidden"></aside>
 
     <!-- 카드 도감 -->
     <section id="codex" class="hidden"></section>

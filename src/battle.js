@@ -228,6 +228,8 @@ function resolveSteps(B) {
 
   // 전투 끝: 선체가 0이 되면 그 단계에서 끝 (같은 순간 둘 다 0이면 무승부)
   const over = () => {
+    // 시험장 무적: 선체가 0이 돼도 1로 버팀
+    for (const s of ships) if (s.god && s.hull <= 0) { s.hull = 1; s.overkill = 0; B.log.push({ t: 'info', text: `${who(s)} 무적 (시험장) — 선체 1로 버팀` }); }
     if (P.hull > 0 && E.hull > 0) return false;
     if (P.hull <= 0 && E.hull <= 0) { B.winner = 'draw'; B.log.push({ t: 'info', text: '동시 격침 — 둘 다 가라앉았다' }); }
     else { B.winner = P.hull <= 0 ? 'enemy' : 'player'; B.log.push({ t: 'info', text: `${B.winner === 'player' ? '적함' : '나침반'} 격침 — 전투 끝` }); }

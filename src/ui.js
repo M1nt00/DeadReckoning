@@ -474,6 +474,8 @@ function renderLog() {
 
 function render() {
   document.body.classList.toggle('resolving', resolving);
+  $('sbBtn').classList.toggle('hidden', !B.sandbox);
+  if (!B.sandbox) $('sbPanel').classList.add('hidden');
   $('turnInfo').textContent = `턴 ${B.turn}`;
   $('drawPile').innerHTML = `<b>${B.player.draw.length}</b><small>뽑을 더미</small>`;
   $('discardPile').innerHTML = `<b>${B.player.discard.length}</b><small>버린 더미</small>`;
@@ -915,6 +917,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (!$('overlay').classList.contains('hidden')) {
+    if ($('overlay').querySelector('.sbBox')) { if (e.key === 'Escape') $('overlay').classList.add('hidden'); return; }
     if (e.key === 'Escape' || e.key.toLowerCase() === 'h' || e.key === 'Enter' || e.code === 'Space') { e.preventDefault(); closeOverlay(); }
     return;
   }
@@ -948,6 +951,113 @@ function start(enemyKey = 'vex', playerCfg = null) {
   render();
 }
 
+
+// ── 시험장: 원하는 덱 · 적 · 상황으로 바로 시험 ─────────
+const SB = { deck: {}, enemy: 'vex', dist: 1200, godP: true, godE: false };
+const sbShips = () => [['player', '나침반 (내 덱)']].concat(Object.entries(DATA.ships).filter(([k]) => k !== 'player').map(([k, s]) => [k, s.name]));
+const sbOrder = ['weapon', 'defense', 'move', 'system', 'field', 'support'];
+const sbIds = () => Object.keys(DATA.cards).sort((a, b) => sbOrder.indexOf(DATA.cards[a].type) - sbOrder.indexOf(DATA.cards[b].type) || DATA.cards[a].name.localeCompare(DATA.cards[b].name, 'ko'));
+function sbPreset(k) {
+  SB.deck = {};
+  const list = k === 'all' ? sbIds() : k === 'none' ? [] : k === 'player' ? DATA.starterDeck : DATA.ships[k].deck;
+  for (const id of list) SB.deck[id] = (SB.deck[id] || 0) + 1;
+}
+function sbSetupHTML() {
+  const n = Object.values(SB.deck).reduce((a, b) => a + b, 0);
+  const ships = Object.entries(DATA.ships).filter(([k]) => k !== 'player');
+  return `<div class="box sbBox">
+    <h1>시험장 <small>원하는 덱 · 적 · 상황으로 바로 시험</small></h1>
+    <div class="sbRow"><b>내 덱 불러오기</b>
+      ${sbShips().map(([k, nm]) => `<button data-sbp="${k}">${nm}</button>`).join('')}
+      <button data-sbp="all">모든 카드 1장씩</button><button data-sbp="none">비우기</button></div>
+    <div class="sbGrid">${sbIds().map((id) => { const c = DATA.cards[id], k = SB.deck[id] || 0; return `<div class="sbCard ${k ? 'on' : ''}" data-type="${c.type}">
+      <span class="ri">${iconSVG(id, 22)}</span><span class="nm">${c.name}</span>
+      <button data-sbc="${id}" data-d="-1">−</button><b>${k}</b><button data-sbc="${id}" data-d="1">+</button></div>`; }).join('')}</div>
+    <div class="sbRow"><b>내 덱 ${n}장</b>
+      <span>적 <select id="sbEnemy">${ships.map(([k, s]) => `<option value="${k}" ${SB.enemy === k ? 'selected' : ''}>${s.name}</option>`).join('')}</select></span>
+      <span>시작 거리 <select id="sbDist">${Array.from({ length: 21 }, (_, i) => i * 100).map((d) => `<option value="${d}" ${SB.dist === d ? 'selected' : ''}>${d.toLocaleString()}km</option>`).join('')}</select></span>
+      <label><input type="checkbox" id="sbGodP" ${SB.godP ? 'checked' : ''}> 나 무적</label>
+      <label><input type="checkbox" id="sbGodE" ${SB.godE ? 'checked' : ''}> 적 무적</label></div>
+    <div class="sbRow"><button id="sbStart" class="sbGo" ${n ? '' : 'disabled'}>시험 시작</button><button id="sbClose" class="ghostBtn">닫기</button></div>
+  </div>`;
+}
+function showSandboxSetup() {
+  if (!Object.keys(SB.deck).length) sbPreset('player');
+  $('overlay').innerHTML = sbSetupHTML();
+  $('overlay').classList.remove('hidden');
+}
+$('overlay').addEventListener('click', (e) => {
+  const box = e.target.closest('.sbBox');
+  if (!box) return;
+  const keepSel = () => { SB.enemy = $('sbEnemy').value; SB.dist = +$('sbDist').value; SB.godP = $('sbGodP').checked; SB.godE = $('sbGodE').checked; };
+  const p = e.target.closest('[data-sbp]'), c = e.target.closest('[data-sbc]');
+  if (p) { keepSel(); sbPreset(p.dataset.sbp); showSandboxSetup(); return; }
+  if (c) { keepSel(); const id = c.dataset.sbc; SB.deck[id] = Math.max(0, Math.min(9, (SB.deck[id] || 0) + +c.dataset.d)); if (!SB.deck[id]) delete SB.deck[id]; showSandboxSetup(); return; }
+  if (e.target.id === 'sbClose') { $('overlay').classList.add('hidden'); return; }
+  if (e.target.id === 'sbStart') { keepSel(); startSandbox(); }
+});
+function startSandbox() {
+  const deck = [];
+  for (const [id, n] of Object.entries(SB.deck)) for (let i = 0; i < n; i++) deck.push(id);
+  if (!deck.length) return;
+  $('overlay').classList.add('hidden');
+  fadeTo(() => {
+    hideTitle();
+    start(SB.enemy, { deck });
+    B.sandbox = true;
+    B.player.god = SB.godP; B.enemy.god = SB.godE;
+    B.distance = SB.dist; B.xP = 0; B.xE = SB.dist;
+    B.log.push({ t: 'info', text: `시험장 — ${B.enemy.name} · 거리 ${SB.dist}km` });
+    Scene.reset(SB.dist); Scene.sync(B);
+    B.introShown = true;
+    render(); showBanner();
+  });
+}
+
+// 전투 중 시험 도구
+function sbPanelHTML() {
+  const P = B.player, E = B.enemy;
+  const st = Object.entries(DATA.status).map(([k, d]) => `<div class="sbLine"><span>${d.icon} ${d.name}</span><button data-sbt="st:player:${k}">나 +1</button><button data-sbt="st:enemy:${k}">적 +1</button></div>`).join('');
+  return `<div class="sbHead"><b>시험 도구</b><button data-sbt="close">×</button></div>
+    <div class="sbLine"><span>손패에 넣기</span><select id="sbAddCard">${sbIds().map((id) => `<option value="${id}">${DATA.cards[id].name}</option>`).join('')}</select><button data-sbt="add">넣기</button></div>
+    <div class="sbLine"><span>거리 <b>${B.distance.toLocaleString()}km</b></span><button data-sbt="d:-5">−500</button><button data-sbt="d:-1">−100</button><button data-sbt="d:1">+100</button><button data-sbt="d:5">+500</button></div>
+    <div class="sbLine"><span>선체</span><button data-sbt="hp:player">나 가득</button><button data-sbt="hp:enemy">적 가득</button><button data-sbt="dmg:enemy">적 −20</button></div>
+    <div class="sbLine"><span>열</span><button data-sbt="heat:player:0">나 0</button><button data-sbt="heat:player:20">나 +20</button><button data-sbt="heat:enemy:0">적 0</button><button data-sbt="heat:enemy:20">적 +20</button></div>
+    <div class="sbLine"><span>연료 <b>${P.fuel}</b></span><button data-sbt="fuel">+3</button><button data-sbt="od">OD 충전</button></div>
+    ${st}
+    <div class="sbLine"><span>상태이상</span><button data-sbt="stclear">모두 지우기</button></div>
+    <div class="sbLine"><span>무적</span><button data-sbt="god:player" class="${P.god ? 'on' : ''}">나 ${P.god ? 'ON' : 'OFF'}</button><button data-sbt="god:enemy" class="${E.god ? 'on' : ''}">적 ${E.god ? 'ON' : 'OFF'}</button></div>
+    <div class="sbNote">계획 중에만 바뀌어요 (처리 중엔 안 됨)</div>`;
+}
+function sbToggle(show) {
+  const el = $('sbPanel');
+  if (show === undefined) show = el.classList.contains('hidden');
+  el.classList.toggle('hidden', !show);
+  if (show) el.innerHTML = sbPanelHTML();
+}
+$('sbBtn').onclick = () => sbToggle();
+$('sbPanel').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sbt]');
+  if (!b || !B) return;
+  const [act, a1, a2] = b.dataset.sbt.split(':');
+  if (act === 'close') { sbToggle(false); return; }
+  if (B.phase !== 'plan' || resolving) { hint('시험 도구는 계획 중에만 쓸 수 있어요'); return; }
+  const P = B.player, ship = (k) => B[k];
+  if (act === 'add') { P.hand.push($('sbAddCard').value); drawnIdx = [P.hand.length - 1]; skipDeal = true; }
+  if (act === 'd') { B.xE = B.xP + clamp(B.distance + +a1 * 100, 0, DATA.rules.maxDistance); B.distance = B.xE - B.xP; }
+  if (act === 'hp') ship(a1).hull = ship(a1).maxHull;
+  if (act === 'dmg') ship(a1).hull = Math.max(1, ship(a1).hull - 20);
+  if (act === 'heat') ship(a1).heat = +a2 ? ship(a1).heat + +a2 : 0;
+  if (act === 'fuel') P.fuel += 3;
+  if (act === 'od') P.odCooldown = 0;
+  if (act === 'st') addStatus(ship(a1), a2, 1);
+  if (act === 'stclear') { P.st = {}; B.enemy.st = {}; P.locked = -1; }
+  if (act === 'god') ship(a1).god = !ship(a1).god;
+  Scene.dist = B.distance; Scene.sync(B);
+  render();
+  $('sbPanel').innerHTML = sbPanelHTML();
+});
+
 // ── 메인 화면 ────────────────────────────────
 let onTitle = false, titleSel = 0;
 const titleItems = () => [...document.querySelectorAll('.tMenu button')].filter((b) => !b.disabled);
@@ -961,6 +1071,7 @@ function titlePick(m) {
   if (m === 'depth10') fadeTo(() => { hideTitle(); Voyage.startEndlessAt(10); });
   if (m === 'rules') showHelp();
   if (m === 'codex') showCodex();
+  if (m === 'sandbox') showSandboxSetup();
 }
 function showTitle() {
   onTitle = true;
