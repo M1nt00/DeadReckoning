@@ -58,14 +58,6 @@ function expectedDmg(P) {
   return { dmg: t, torps, d };
 }
 
-function heatTag(h) {
-  const r = DATA.rules;
-  if (h >= r.meltdownHeat) return '<span class="tag melt">멜트다운</span>';
-  if (h >= r.dangerHeat) return '<span class="tag danger">위험 — 다음 턴 최대 연료 −1</span>';
-  if (h >= r.warnHeat) return '<span class="tag warn">경고 — 보호막 약화</span>';
-  return '';
-}
-
 // 최근 기동 기록: ▶ 전진 · ◀ 후진 · ■ 정지 (오래된 것 → 최근)
 function moveHistHTML(s) {
   if (!s.moveHist.length) return '<span class="mh none">기록 없음</span>';
@@ -78,83 +70,123 @@ function moveHistHTML(s) {
   }).join('');
 }
 
-// ── 전장 위 계기판 ───────────────────────────
-// 선체 = 크게 · 보호막 = 바로 아래 파란 막대 · 나머지는 작게
-// 선체/보호막 숫자는 연출(Scene)이 실제로 맞는 순간에 맞춰 바뀜
+// ── 모서리 계기판: 이름 · 오버드라이브 · 읽을 단서 (선체 · 열 · 상태는 함선에 붙음) ──
 function hudBuild(el) {
   el.innerHTML = `
-    <div class="hname"></div>
-    <div class="hullRow">
-      <span class="hpNum"><b class="hp"></b><small class="hpMax"></small></span>
-      <span class="shNum"></span>
-      <span class="lowTag">선체 위험</span>
-    </div>
-    <div class="hbar"><i class="trail"></i><i class="fill"></i><span class="ticks"></span></div>
-    <div class="sbar"><i class="sfill"></i></div>
-    <div class="subRow">
-      <span class="lbl">열</span>
-      <span class="bar heatBar"><i class="ghost"></i><i class="hf"></i><span class="mark m1"></span><span class="mark m2"></span></span>
-      <b class="heatNum"></b>
-      <span class="lbl fuelLbl">연료</span><b class="fuelNum"></b>
-    </div>
-    <div class="tags"></div>
+    <div class="hrow"><span class="hname"></span><span class="tags"></span></div>
     <div class="intel"></div>`;
   el.dataset.built = '1';
 }
 
-function hudUpdate(el, s, ghostHeat) {
-  const r = DATA.rules;
+function hudUpdate(el, s) {
   if (!el.dataset.built) hudBuild(el);
-  const v = Scene.ships[s.side];
-  const hp = v.hp !== undefined ? v.hp : s.hull, sh = v.sh !== undefined ? v.sh : s.shield;
   const q = (c) => el.querySelector(c);
   q('.hname').textContent = s.name;
-  q('.hp').textContent = hp;
-  q('.hpMax').textContent = ' / ' + s.maxHull;
-  const pctHp = (hp / s.maxHull) * 100;
-  q('.fill').style.width = pctHp + '%';
-  q('.trail').style.width = pctHp + '%';          // CSS가 늦게 따라와서 깎인 부분이 하얗게 남음
-  q('.ticks').style.backgroundSize = `${(20 / s.maxHull) * 100}% 100%`;   // 20칸마다 눈금
-  q('.shNum').innerHTML = sh > 0 ? `<b>+${sh}</b> 보호막` : '';
-  q('.sfill').style.width = Math.min(100, (sh / s.maxHull) * 100) + '%';
-  el.classList.toggle('low', hp > 0 && hp / s.maxHull <= 0.3);
-  el.classList.toggle('shielded', sh > 0);
-  // 맞으면 번쩍
-  const prev = +(el.dataset.hp || hp);
-  if (hp < prev) { el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit'); }
-  el.dataset.hp = hp;
-  // 열 · 연료
-  q('.ghost').style.width = ghostHeat !== undefined && ghostHeat > s.heat ? Math.min(100, ghostHeat) + '%' : '0';
-  q('.hf').style.width = Math.min(100, s.heat) + '%';
-  q('.m1').style.left = r.warnHeat + '%';
-  q('.m2').style.left = r.dangerHeat + '%';
-  q('.heatNum').textContent = s.heat + (ghostHeat !== undefined && ghostHeat !== s.heat ? '→' + ghostHeat : '');
-  // 적 연료는 보여 주지 않음
-  q('.fuelLbl').style.display = s.side === 'enemy' ? 'none' : '';
-  q('.fuelNum').textContent = s.side === 'enemy' ? '' : s.fuel;
-  // 상태 태그
-  q('.tags').innerHTML = [
-    heatTag(s.heat),
-    s.odCooldown === 0 ? '<span class="tag od">⚡ OD 준비됨</span>' : `<span class="tag">OD 충전 ${s.odCooldown}턴</span>`,
-    s.skip ? '<span class="tag melt">멜트다운 — 기본 엔진만</span>' : '',
-    s.overheated && s.side === 'player' ? '<span class="tag danger">과열 — 이번 턴 최대 연료 −1</span>' : '',
-    s.locked >= 0 && s.side === 'player' ? '<span class="tag danger">교란 — 손패 1장 잠김</span>' : '',
-    s.jam > 0 ? `<span class="tag danger">교란 ${s.jam} — 다음 턴 손패 잠김</span>` : '',
-    ...s.charges.map((ch) => `<span class="tag solar">☀ 초고열 충전 · ${ch.left}턴 뒤 ${ch.dmg}</span>`),
-    s.coolTurns > 0 ? `<span class="tag cool">❄ 냉각 상태 ${s.coolTurns}턴 (−${s.coolAmt})</span>` : '',
-    s.regen > 0 ? `<span class="tag regen">재생 보호막 +${s.regen} 대기</span>` : '',
-  ].join('');
+  q('.tags').innerHTML = s.odCooldown === 0 ? '<span class="tag od">⚡ OD 준비됨</span>' : `<span class="tag">OD 충전 ${s.odCooldown}턴</span>`;
   // 읽을 단서
   q('.intel').innerHTML =
     (s.side === 'enemy' && s.doctrine ? `<div><span class="lbl">교리</span><span class="tag doc" title="${s.doctrineDesc || ''}">${s.doctrine} · 선호 ${s.preferJitter ? `${fmtM(s.preferBase)} ±${s.preferJitter}` : fmtM(s.prefer)}</span></div>` : '') +
     `<div><span class="lbl">기동</span>${moveHistHTML(s)}</div>`;
 }
 
+// ── 함선에 붙은 상태 표시 ─────────────────────
+// 위: 선체 막대 (보호막은 막대 위에 덧칠 + 방패 숫자) · 아래: 열 막대 (단계 눈금) + 상태 칸 (마우스 → 설명)
+const statEl = {};
+function statBuild(side) {
+  const top = document.createElement('div');
+  top.className = `shipStat top ${side}`;
+  top.innerHTML = `
+    <b class="ssHp"></b>
+    <div class="ssBar"><i class="trail"></i><i class="fill"></i><i class="shOver"></i><span class="ticks"></span></div>
+    <span class="ssShield"></span>`;
+  const bot = document.createElement('div');
+  bot.className = `shipStat bot ${side}`;
+  bot.innerHTML = `
+    <div class="ssHeat" data-tip=""><span class="hl">열</span><div class="hbarH"><i class="ghost"></i><i class="hf"></i><span class="mk m1"></span><span class="mk m2"></span></div><b class="heatNum"></b></div>
+    <div class="ssChips"></div>
+    <div class="ssAssign"></div>`;
+  $('field').appendChild(top); $('field').appendChild(bot);
+  statEl[side] = { top, bot, hp: null, assign: '' };
+}
+
+// 상태 칸: [아이콘 + 숫자], 마우스를 올리면 설명. kind = buff / debuff / info
+function statChips(s) {
+  const R = DATA.rules, out = [];
+  const chip = (kind, icon, num, tip) => out.push(`<span class="sChip ${kind}" data-tip="${tip}"><i>${icon}</i>${num !== '' ? `<b>${num}</b>` : ''}</span>`);
+  if (s.skip) chip('debuff', '☢', '', `멜트다운 — 이번 턴은 기본 엔진(이동)만. 턴이 끝나면 열 ${R.meltdownResetHeat}`);
+  if (s.overheated) chip('debuff', '⚠', '', `과열 위험 — 이번 턴 최대 연료 −${R.dangerFuel}`);
+  if (s.locked >= 0) chip('debuff', '⛓', '', '교란 — 이번 턴 손패 1장 잠김');
+  if (s.jam > 0) chip('debuff', '✖', s.jam, `교란 ${s.jam} — 다음 턴 손패 1장 잠김. 턴마다 1씩 줄어듦`);
+  for (const ch of s.charges) chip('info', '☀', ch.left, `초고열 응집 충전 — ${ch.left}턴 뒤 피해 ${ch.dmg}${ch.enemyHeat ? ` · 상대 열 +${ch.enemyHeat}` : ''}. 충전 중 매 턴 열 +${ch.heat} · 최대 연료 −${ch.fuel}`);
+  if (s.coolTurns > 0) chip('buff', '❄', s.coolTurns, `냉각 — 매 턴 열 −${s.coolAmt} (${s.coolTurns}턴 남음)`);
+  if (s.regen > 0) chip('buff', '⟳', '+' + s.regen, `재생 보호막 — 다음 방어 단계에 보호막 +${s.regen}`);
+  return out.join('');
+}
+
+function heatTip(h) {
+  const r = DATA.rules;
+  return `열 ${h} · ${r.warnHeat}↑ 보호막 약화 · ${r.dangerHeat}↑ 다음 턴 최대 연료 −${r.dangerFuel} · ${r.meltdownHeat} 멜트다운`;
+}
+
+// 내용 (선체 · 보호막은 연출에 맞춰 바뀌는 값)
+function statUpdate(side, ghostHeat) {
+  if (!statEl[side]) statBuild(side);
+  const E = statEl[side], s = B[side], v = Scene.ships[side], r = DATA.rules;
+  const hp = v.hp !== undefined ? v.hp : s.hull, sh = v.sh !== undefined ? v.sh : s.shield;
+  const q = (el, c) => el.querySelector(c);
+  q(E.top, '.ssHp').textContent = hp;
+  q(E.top, '.fill').style.width = (hp / s.maxHull) * 100 + '%';
+  q(E.top, '.ticks').style.backgroundSize = `${(20 / s.maxHull) * 100}% 100%`;   // 20칸마다 눈금
+  // 보호막: 선체 막대 오른쪽 끝부터 덧칠
+  const shW = Math.min(hp, sh) / s.maxHull * 100;
+  q(E.top, '.shOver').style.cssText = `left:${(hp / s.maxHull) * 100 - shW}%;width:${shW}%`;
+  q(E.top, '.ssShield').innerHTML = sh > 0 ? `🛡<b>${sh}</b>` : '';
+  E.top.classList.toggle('low', hp > 0 && hp / s.maxHull <= 0.3);
+  if (E.hp !== null && hp < E.hp) { E.top.classList.remove('hit'); void E.top.offsetWidth; E.top.classList.add('hit'); }
+  E.hp = hp;
+  // 열: 단계 눈금 · 단계마다 색
+  const h = s.heat;
+  const stage = h >= r.meltdownHeat ? 'melt' : h >= r.dangerHeat ? 'danger' : h >= r.warnHeat ? 'warn' : '';
+  E.bot.querySelector('.ssHeat').className = 'ssHeat ' + stage;
+  q(E.bot, '.hf').style.width = Math.min(100, h) + '%';
+  q(E.bot, '.ghost').style.width = ghostHeat !== undefined && ghostHeat > h ? Math.min(100, ghostHeat) + '%' : '0';
+  q(E.bot, '.m1').style.left = r.warnHeat + '%';
+  q(E.bot, '.m2').style.left = r.dangerHeat + '%';
+  q(E.bot, '.heatNum').textContent = h + (ghostHeat !== undefined && ghostHeat !== h ? '→' + ghostHeat : '');
+  E.bot.querySelector('.ssHeat').dataset.tip = heatTip(h);
+  q(E.bot, '.ssChips').innerHTML = statChips(s);
+}
+
+// 매 프레임: 함선 위치에 맞춰 옮기기 (가까워지면 서로 바깥쪽으로)
+Scene.onFrame = () => {
+  const show = B && Scene.mode === 'battle' && !onTitle;
+  for (const side of ['player', 'enemy']) {
+    const E = statEl[side];
+    if (!E) continue;
+    const v = Scene.ships[side];
+    const vis = show && !v.dead;
+    E.top.style.display = E.bot.style.display = vis ? '' : 'none';
+    if (!vis) continue;
+    const w = Scene.pos(side), p = Scene.toScreen(w.x, w.y), z = Scene.z0 * Scene.cam.z;
+    const F = Scene.field, out = side === 'player' ? -14 : 14;
+    const x = p.x - F.x + out;
+    E.top.style.transform = `translate(${x}px, ${p.y - F.y - 52 * z}px) translate(-50%, -100%)`;
+    E.bot.style.transform = `translate(${x}px, ${p.y - F.y + 44 * z}px) translate(-50%, 0)`;
+    if (v.trail !== undefined && v.max) E.top.querySelector('.trail').style.width = (v.trail / v.max) * 100 + '%';
+    // 계획한 카드 표식 (적 아래 = 조준한 무기, 내 아래 = 방어 · 기동)
+    const list = Scene.assign && Scene.assign[side];
+    const txt = list && list.length ? (side === 'enemy' ? '◎ ' : '▣ ') + list.join(' · ') : '';
+    if (txt !== E.assign) { E.assign = txt; E.bot.querySelector('.ssAssign').textContent = txt; }
+  }
+};
+
 function renderHud() {
   const P = B.player;
   const planning = B.phase === 'plan' && !resolving;
-  hudUpdate($('hudPlayer'), P, planning ? planSummary(P, P.plan).heatAfter : undefined);
+  hudUpdate($('hudPlayer'), P);
   hudUpdate($('hudEnemy'), B.enemy);
+  statUpdate('player', planning ? planSummary(P, P.plan).heatAfter : undefined);
+  statUpdate('enemy');
   $('steps').innerHTML = ['기동', '방어', '공격', '열'].map((n, i) => `<span class="${stepName === n ? 'on' : ''}">${'①②③④'[i]} ${n}</span>`).join('');
   $('distLbl').innerHTML = `거리 <b>${fmtM(B.distance)}</b> · ${bandOf(B.distance)} <small>(적 함선에 마우스 → 조준경)</small>`;
   $('torps').innerHTML = B.torpedoes.map((t) => `<span class="${t.owner === P ? 'me' : 'foe'}">${t.owner === P ? '▶ 내 어뢰' : '◀ 적 어뢰'} 비행 중</span>`).join(' · ');
@@ -239,16 +271,26 @@ function renderPlan() {
     ? `<span class="ctl expect">예상 피해 <b>${ex.dmg}</b>${ex.torps ? ` + 어뢰 ${ex.torps}` : ''} <small>(${fmtM(ex.d)}, 적이 가만히 있다면)</small></span>` : '';
   let items = plan.items.map((it, i) => chipHTML(it, editable, i)).join('');
   if (P.skip) items = engineHTML + '<span class="empty">멜트다운 — 이번 턴은 기본 엔진(이동)만. 턴이 끝나면 열 40</span>';
-  else items = engineHTML + (items || '<span class="empty">무기는 적 함선에 끌어서 조준 · 방어 · 기동은 내 함선에 (단축키 1~5)</span>');
+  else items = engineHTML + (items || '<span class="empty">카드를 함선에 끌어 놓기 (1~5)</span>');
+  const fuelLeft = Math.max(0, P.fuel - sum.cost - sum.cool);
   $('planBar').innerHTML = `
     <span class="label">내 계획</span>
-    <div class="planRow">${items}</div>
-    <span class="ctl">연료 <span class="fuelPips">${pips}</span> ${sum.cost}/${sum.cap}</span>
-    ${exTxt}
+    <div class="planRow">${items}${exTxt}</div>
+    <div class="pbCtl">
+    <div class="fuelBox ${sum.ok ? '' : 'short'}" title="연료: 카드 · 기본 엔진 · 냉각에 씀. 남으면 ${R.carryMax}까지 다음 턴으로 이월${!sum.ok ? ' — 지금 연료 부족' + (!plan.od && odReady ? ' (오버드라이브로 +' + R.overdriveFuel + ')' : '') : ''}">
+      <span class="fbl">연료</span>
+      <span class="fuelPips">${pips}</span>
+      <b class="fuelBig">${fuelLeft}<small> 남음${carry > 0 ? ` · 이월 ${carry}` : ''}</small></b>
+      ${!sum.ok ? `<span class="fshort">부족${!plan.od && odReady ? ' · OD +' + R.overdriveFuel : ''}</span>` : ''}
+    </div>
+    <div class="coolBox" title="남는 연료 1당 열 −${R.coolPerFuel}">
+      <span class="fbl">냉각</span>
+      <button data-act="cool" data-d="-1" ${editable ? '' : 'disabled'}>−</button><b>${plan.cool}</b><button data-act="cool" data-d="1" ${editable ? '' : 'disabled'}>+</button>
+      ${plan.cool ? `<small>열 −${plan.cool * R.coolPerFuel}</small>` : ''}
+    </div>
     ${P.skip ? '' : odHTML}
-    ${!sum.ok ? `<span class="ctl" style="color:var(--foe)">연료 부족${!plan.od && odReady ? ' — 오버드라이브로 +' + R.overdriveFuel : ''}</span>` : ''}
-    <span class="ctl">냉각 <button data-act="cool" data-d="-1" ${editable ? '' : 'disabled'}>−</button> ${plan.cool} <button data-act="cool" data-d="1" ${editable ? '' : 'disabled'}>+</button>${carry > 0 ? ` 이월 ${carry}` : ''}</span>
-    <button id="decide" ${B.phase === 'plan' && !resolving && sum.ok ? '' : 'disabled'}>결정 · 동시 공개 (Space)</button>`;
+    <button id="decide" ${B.phase === 'plan' && !resolving && sum.ok ? '' : 'disabled'} title="결정 → 동시 공개">결정 (Space)</button>
+    </div>`;
 }
 
 // 손패: 새 턴에만 새로 그리고(한 장씩 올라옴), 그 밖엔 상태만 바꿔서 부드럽게 움직이게
@@ -258,12 +300,7 @@ function renderHand() {
   const inPlan = new Set(P.plan.items.map((it) => it.hand));
   const sig = B.turn + '|' + P.hand.join(',') + '|' + P.locked;
   if (sig === handSig) {
-    for (const el of $('hand').querySelectorAll('.card')) {
-      const i = +el.dataset.hand;
-      el.classList.toggle('planned', inPlan.has(i));
-      const w = el.querySelector('.cnowWrap');
-      if (w) w.innerHTML = dmgNowHTML(DATA.cards[el.dataset.id]);
-    }
+    for (const el of $('hand').querySelectorAll('.card')) el.classList.toggle('planned', inPlan.has(+el.dataset.hand));
     return;
   }
   handSig = sig;
@@ -273,22 +310,98 @@ function renderHand() {
     const far = c.maxRange !== undefined && B.distance > c.maxRange;   // 물러나기: 400km보다 멀면 못 씀
     return `<div class="card ${skipDeal ? '' : 'dealt'} ${inPlan.has(i) ? 'planned' : ''} ${locked || far ? 'locked' : ''}" data-type="${c.type}" data-hand="${i}" data-id="${id}" style="animation-delay:${i * 0.07}s">
       <div class="armed">${c.type === 'weapon' ? '◎ 조준' : '▣ 준비'}</div>
-      <div class="cost">${c.variable ? '?' : c.cost}</div>
-      <div class="key">${i + 1}</div>
-      <div class="cart">${iconSVG(id, 42)}</div>
-      <div class="cbody">
-        <div class="ctype">${TYPE_NAME[c.type]}<span class="cheat">열 ${c.variable ? `연료당 ${c.heatPerStep}` : c.heat}</span></div>
-        <div class="cname">${c.name}</div>
-        ${miniBar(c)}
-        <div class="cnowWrap">${dmgNowHTML(c)}</div>
-        <div class="cdesc">${c.desc}</div>
+      <div class="ctop">
+        <span class="cost" title="연료 비용">${c.variable ? '?' : c.cost}</span>
+        <span class="ctype">${TYPE_NAME[c.type]}</span>
+        <span class="cheat" title="열">🔥${c.variable ? c.heatPerStep : c.heat}</span>
       </div>
+      <div class="cart">${iconSVG(id, 40)}</div>
+      <div class="cbody">
+        <div class="cname">${c.name}</div>
+        <div class="ctext">${c.text || c.desc}</div>
+      </div>
+      <div class="cfoot"><span class="key">${i + 1}</span><button class="detailBtn" data-hand="${i}">자세히</button></div>
       ${locked ? '<div class="lockNote">교란으로 잠김</div>' : far ? `<div class="lockNote">${c.maxRange}km 이내에서만</div>` : ''}
       ${c.type === 'system' ? '<div class="sysBadge">즉시</div>' : ''}
     </div>`;
   }).join('');
   skipDeal = false;
 }
+
+// ── [자세히]: 카드의 실제 효과 (거리별 피해 등) ──
+// 거리별 피해 표 → 구간 [[시작, 끝, 피해]] (피해 0 구간은 뺌)
+function bandsOf(c) {
+  const R = DATA.rules, out = [];
+  for (let d = 0; d <= R.maxDistance; d += R.step) {
+    const v = dmgAt(c, d), last = out[out.length - 1];
+    if (last && last[2] === v && last[1] === d - R.step) last[1] = d; else out.push([d, d, v]);
+  }
+  return out.filter((b) => b[2] > 0);
+}
+
+function detailHTML(c) {
+  const R = DATA.rules, P = B.player, sum = planSummary(P, P.plan);
+  const now = B.distance, after = clamp(now - sum.move * R.step, 0, R.maxDistance);
+  const km = (a, b) => (a === b ? fmtM(a) : `${a.toLocaleString()}~${fmtM(b)}`);
+  let body = '';
+  if (c.type === 'weapon' && c.dmg) {
+    const rows = bandsOf(c).map(([a, b, v]) => {
+      const here = !c.torpedo && now >= a && now <= b, aft = !c.torpedo && after !== now && after >= a && after <= b;
+      return `<tr class="${here ? 'now' : ''} ${aft ? 'after' : ''}"><td>${km(a, b)}</td><td><b>${v}</b></td><td>${here ? '◀ 지금' : ''}${aft ? '◀ 이동 후' : ''}</td></tr>`;
+    }).join('');
+    body += `<div class="dsub">${c.torpedo ? '거리별 피해 — 다음 턴 도착했을 때의 거리' : '거리별 피해'}</div><table class="dtable">${rows}</table>${miniBar(c)}`;
+    if (!c.torpedo) body += `<div class="dnow">지금 ${fmtM(now)} → <b>${weaponDmg(c, now, sum.od)}</b>${after !== now ? ` · 이동 후 ${fmtM(after)} → <b>${weaponDmg(c, after, sum.od)}</b>` : ''} <small>(적이 가만히 있다면)</small></div>`;
+  }
+  const notes = [];
+  if (c.torpedo) notes.push('다음 턴에 도착해서 그때의 거리로 명중 판정. 점방어에 격추된다.');
+  if (c.charge) notes.push(`${c.charge.turns}턴 동안 매 턴: 열 +${c.charge.heat} · 최대 연료 −${c.charge.fuel}`, `${c.charge.turns}턴 후: 거리 무관 피해 ${c.charge.dmg}${c.charge.enemyHeat ? ` · 상대 열 +${c.charge.enemyHeat}` : ''}`);
+  if (c.ignoreShield) notes.push('관통 피해 — 보호막을 무시한다 (피해 감소는 적용).');
+  if (c.jam) notes.push(`명중하면 교란 ${c.jam} — 다음 턴 손패 1장 잠김 (쌓이고, 턴마다 1씩 줄어듦).`);
+  if (c.selfDamage) notes.push(`명중하면 나도 피해 ${c.selfDamage}.`);
+  if (c.type === 'weapon' && !c.charge) notes.push(`오버드라이브 중이면 피해 +${Math.round(R.overdriveBonus * 100)}%.`);
+  if (c.type !== 'weapon') notes.push(c.desc);
+  return `<div class="dhead"><span class="cost">${c.variable ? '?' : c.cost}</span><b>${c.name}</b><span class="dtype" data-type="${c.type}">${TYPE_NAME[c.type]}</span><span class="cheat">🔥${c.heat}</span></div>
+    ${body}${notes.length ? `<ul>${notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : ''}`;
+}
+
+let detailHand = -1;
+function closeDetail() {
+  detailHand = -1;
+  const el = $('cardDetail');
+  if (el) el.classList.add('hidden');
+}
+function toggleDetail(i) {
+  if (detailHand === i) { closeDetail(); return; }
+  let el = $('cardDetail');
+  if (!el) { el = document.createElement('div'); el.id = 'cardDetail'; document.body.appendChild(el); }
+  const card = document.querySelector(`#hand .card[data-hand="${i}"]`);
+  if (!card) return;
+  el.innerHTML = detailHTML(DATA.cards[B.player.hand[i]]);
+  el.classList.remove('hidden');
+  // 카드 바로 위에 (화면 밖으로 안 나가게)
+  const r = card.getBoundingClientRect(), w = el.offsetWidth;
+  el.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+  el.style.bottom = window.innerHeight - r.top + 10 + 'px';
+  detailHand = i;
+}
+
+// ── 더미 보기: 뽑을 더미는 순서를 숨기고 정렬해서 ──
+function showPile(kind) {
+  if (!B || resolving) return;
+  closeDetail();
+  const P = B.player, list = kind === 'draw' ? P.draw : P.discard, cnt = {};
+  for (const id of list) cnt[id] = (cnt[id] || 0) + 1;
+  const order = ['weapon', 'defense', 'move', 'system'];
+  const ids = Object.keys(cnt).sort((a, b) => order.indexOf(DATA.cards[a].type) - order.indexOf(DATA.cards[b].type) || DATA.cards[a].name.localeCompare(DATA.cards[b].name, 'ko'));
+  $('overlay').innerHTML = `<div class="box pileBox"><h1>${kind === 'draw' ? '뽑을 더미' : '버린 더미'} <small>${list.length}장</small></h1>
+    <p class="pnote">${kind === 'draw' ? '순서는 숨겨져 있다 — 무엇이 남았는지만 보인다.' : '뽑을 더미가 떨어지면 이 카드들을 섞어서 다시 뽑는다.'}</p>
+    <div class="pileList">${ids.length ? ids.map((id) => `<div class="pileItem" data-type="${DATA.cards[id].type}"><span class="ri">${iconSVG(id, 26)}</span><b>${DATA.cards[id].name}</b><span class="pn">×${cnt[id]}</span></div>`).join('') : '<p class="pnote">비어 있다</p>'}</div>
+    <button id="closePile">닫기</button></div>`;
+  $('overlay').classList.remove('hidden');
+  $('closePile').onclick = () => $('overlay').classList.add('hidden');
+}
+$('drawPile').onclick = () => showPile('draw');
+$('discardPile').onclick = () => showPile('discard');
 
 function renderLog() {
   $('log').innerHTML = '<h3>전투 기록</h3>' + B.log.slice(-80).map((l) => `<p class="${l.t}">${l.text}</p>`).join('');
@@ -297,7 +410,10 @@ function renderLog() {
 
 function render() {
   document.body.classList.toggle('resolving', resolving);
-  $('turnInfo').textContent = `턴 ${B.turn}  ·  덱 ${B.player.draw.length}  ·  버린 카드 ${B.player.discard.length}`;
+  $('turnInfo').textContent = `턴 ${B.turn}`;
+  $('drawPile').innerHTML = `<b>${B.player.draw.length}</b><small>뽑을 더미</small>`;
+  $('discardPile').innerHTML = `<b>${B.player.discard.length}</b><small>버린 더미</small>`;
+  closeDetail();
   renderHud();
   renderRange();
   renderPlan();
@@ -477,6 +593,10 @@ function pickUp(i) {
 document.addEventListener('pointerdown', (e) => {
   // 숫자키로 집은 카드: 클릭한 곳에서 확정 / 취소
   if (drag && drag.sticky) { e.preventDefault(); endAim(drag, e.clientX, e.clientY); drag = null; window.__eatUp = true; return; }
+  // [자세히] 버튼: 끌기 대신 설명창
+  const dBtn = e.target.closest('.detailBtn');
+  if (dBtn) { e.preventDefault(); toggleDetail(+dBtn.dataset.hand); return; }
+  if (!e.target.closest('#cardDetail')) closeDetail();
   const card = e.target.closest('#hand .card');
   if (!card || !B || B.phase !== 'plan' || resolving || B.player.skip) return;
   const i = +card.dataset.hand;

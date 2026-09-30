@@ -121,7 +121,7 @@ const Scene = {
     const F = this.field, sep = this.sep(this.dist);
     const dir = side === 'player' ? -1 : 1;
     const x = F.x + F.w / 2 + dir * sep / 2 - dir * s.lunge + dir * s.kick;
-    const y = F.y + F.h * 0.5 + (side === 'player' ? 8 : -8) + Math.sin(this.time * 0.9 + (side === 'player' ? 0 : 2)) * 3;
+    const y = F.y + F.h * 0.56 + (side === 'player' ? 8 : -8) + Math.sin(this.time * 0.9 + (side === 'player' ? 0 : 2)) * 3;   // 조금 아래: 위쪽 계기판 · 선체 막대 자리
     return { x, y };
   },
   design(side) { return Art.design[this.skin[side]] || Art.design.vex; },
@@ -407,6 +407,7 @@ const Scene = {
     this.last = now;
     this.update(dt);
     this.draw();
+    if (this.onFrame) this.onFrame();          // 화면(ui.js): 함선에 붙은 상태 표시 위치 맞추기
     requestAnimationFrame((t) => this.loop(t));
   },
 
@@ -513,7 +514,7 @@ const Scene = {
     this.drawShip(g, 'player');
     this.drawFx(g);
     g.globalAlpha = 1;
-    if (plates) { this.drawPlate(g, 'player'); this.drawPlate(g, 'enemy'); this.drawAssign(g); }
+    // 선체 · 열 · 상태 · 계획한 카드 표식은 HTML로 함선에 붙임 (ui.js shipStat)
   },
 
   // ── 저격 조준경 ───────────────────────────
@@ -695,7 +696,7 @@ const Scene = {
       g.save();
       g.font = "900 12px 'Malgun Gothic', sans-serif";
       g.textAlign = 'center'; g.textBaseline = 'middle';
-      const w = g.measureText(txt).width + 16, x = p.x + (side === 'player' ? -10 : 10), y = p.y + 60;   // 함선 아래
+      const w = g.measureText(txt).width + 16, x = p.x + (side === 'player' ? -10 : 10), y = p.y - 112;   // 함선 위 (선체 막대보다 위)
       const col = side === 'enemy' ? '#FF5A5F' : '#5CE1E6';
       const pulse = 0.75 + 0.25 * Math.sin(this.time * 4);
       g.fillStyle = 'rgba(4,7,14,0.8)';
