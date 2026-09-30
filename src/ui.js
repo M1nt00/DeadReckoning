@@ -250,13 +250,12 @@ function renderPlan() {
   const P = B.player, plan = P.plan, sum = planSummary(P, plan);
   const canPlan = B.phase === 'plan' && !resolving;
   const editable = canPlan && !P.skip;          // 멜트다운 턴: 카드 · 냉각 · 오버드라이브 불가
-  // 연료 칸: 원래 연료 + 오버드라이브로 늘어난 칸(주황 테두리). 넘치면 빨강
+  // 연료 칸: 원래 연료 칸 + 오버드라이브로 늘어난 칸(주황 테두리). 카드 · 엔진은 오버드라이브 칸부터 씀. 넘치면 빨강
   let pips = '';
-  const total = Math.max(sum.cap, sum.cost + sum.cool);
-  for (let i = 0; i < total; i++) {
-    const cls = [i < sum.cost ? 'used' : i < sum.cost + sum.cool ? 'cool' : '', i >= P.fuel && i < sum.cap ? 'odSlot' : '', i >= sum.cap ? 'over' : ''].join(' ');
-    pips += `<i class="${cls}"></i>`;
-  }
+  const realUsed = sum.cost - sum.short, odN = sum.cap - P.fuel;
+  for (let i = 0; i < P.fuel; i++) pips += `<i class="${i < realUsed ? 'used' : i < realUsed + sum.cool ? 'cool' : ''}"></i>`;
+  for (let j = 0; j < odN; j++) pips += `<i class="odSlot ${j < sum.short ? 'used' : ''}"></i>`;
+  for (let k = sum.cap; k < sum.cost; k++) pips += '<i class="over"></i>';
   const carry = Math.min(DATA.rules.carryMax, sum.left - sum.cool);
   const ex = expectedDmg(P);
   const R = DATA.rules, eng = plan.engine;

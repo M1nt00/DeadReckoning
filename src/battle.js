@@ -72,8 +72,9 @@ function planSummary(s, plan) {
   const od = !!plan.od;
   const cost = plan.items.reduce((t, it) => t + itemCost(it), 0) + Math.abs(eng);
   const cap = s.fuel + (od ? R().overdriveFuel : 0);
-  const short = Math.max(0, cost - s.fuel);          // 오버드라이브로 끌어 쓴 연료
-  const left = Math.max(0, s.fuel - cost);           // 남은 연료 (냉각 · 이월)
+  // 오버드라이브 연료는 카드 · 기본 엔진에만 → 그쪽에 먼저 씀. 원래 연료는 남겨서 냉각 · 이월에
+  const short = Math.min(cost, od ? R().overdriveFuel : 0);   // 오버드라이브 연료로 낸 비용
+  const left = Math.max(0, s.fuel - (cost - short));          // 남은 원래 연료 (냉각 · 이월)
   const cool = Math.min(plan.cool, left);
   const heatIn = plan.items.reduce((t, it) => t + itemHeat(it), 0) + Math.abs(eng) * R().engineHeatPerStep + (od ? R().overdriveHeat : 0);
   // 시스템 카드 (공개 때 가장 먼저): 강제 배기 = 곧바로 열 − · 냉각 촉매 = 이번 턴부터
